@@ -1,3 +1,8 @@
+# GPU-PIM simulator
+
+This is a fork from the original gem5 to create a GPU hosted PIM simulator combining
+AMD gpu models with Aquabolt PIM simulator.
+
 # The gem5 Simulator
 
 This is the repository for the gem5 simulator. It contains the full source code
