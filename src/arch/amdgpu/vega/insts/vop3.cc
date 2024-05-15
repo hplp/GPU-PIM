@@ -66,16 +66,6 @@ namespace VegaISA
         src1.readSrc();
         vcc.read();
 
-        /**
-         * input modifiers are supported by FP operations only
-         */
-        assert(!(instData.ABS & 0x1));
-        assert(!(instData.ABS & 0x2));
-        assert(!(instData.ABS & 0x4));
-        assert(!(extData.NEG & 0x1));
-        assert(!(extData.NEG & 0x2));
-        assert(!(extData.NEG & 0x4));
-
         for (int lane = 0; lane < NumVecElemPerVecReg; ++lane) {
             if (wf->execMask(lane)) {
                 vdst[lane] = bits(vcc.rawData(), lane)
@@ -7630,6 +7620,54 @@ namespace VegaISA
     {
         panicUnimplemented();
     } // execute
+    // --- Inst_VOP3__V_LSHL_ADD_U64 class methods ---
+
+    Inst_VOP3__V_LSHL_ADD_U64::Inst_VOP3__V_LSHL_ADD_U64(InFmt_VOP3A *iFmt)
+        : Inst_VOP3A(iFmt, "v_lshl_add_u64", false)
+    {
+        setFlag(ALU);
+    } // Inst_VOP3__V_LSHL_ADD_U64
+
+    Inst_VOP3__V_LSHL_ADD_U64::~Inst_VOP3__V_LSHL_ADD_U64()
+    {
+    } // ~Inst_VOP3__V_LSHL_ADD_U64
+
+    // --- description from .arch file ---
+    // D.u = (S0.u << S1.u[4:0]) + S2.u.
+    void
+    Inst_VOP3__V_LSHL_ADD_U64::execute(GPUDynInstPtr gpuDynInst)
+    {
+        Wavefront *wf = gpuDynInst->wavefront();
+        ConstVecOperandU64 src0(gpuDynInst, extData.SRC0);
+        ConstVecOperandU32 src1(gpuDynInst, extData.SRC1);
+        ConstVecOperandU64 src2(gpuDynInst, extData.SRC2);
+        VecOperandU64 vdst(gpuDynInst, instData.VDST);
+
+        src0.readSrc();
+        src1.readSrc();
+        src2.readSrc();
+
+        /**
+         * input modifiers are supported by FP operations only
+         */
+        assert(!(instData.ABS & 0x1));
+        assert(!(instData.ABS & 0x2));
+        assert(!(instData.ABS & 0x4));
+        assert(!(extData.NEG & 0x1));
+        assert(!(extData.NEG & 0x2));
+        assert(!(extData.NEG & 0x4));
+
+        for (int lane = 0; lane < NumVecElemPerVecReg; ++lane) {
+            if (wf->execMask(lane)) {
+                int shift_amount = bits(src1[lane], 2, 0);
+                shift_amount = shift_amount > 4 ? 0 : shift_amount;
+                vdst[lane] = (src0[lane] << shift_amount)
+                           + src2[lane];
+            }
+        }
+
+        vdst.write();
+    } // execute
     // --- Inst_VOP3__V_CVT_PKACCUM_U8_F32 class methods ---
 
     Inst_VOP3__V_CVT_PKACCUM_U8_F32::Inst_VOP3__V_CVT_PKACCUM_U8_F32(
@@ -8392,16 +8430,6 @@ namespace VegaISA
         src0.readSrc();
         src1.read();
 
-        /**
-         * input modifiers are supported by FP operations only
-         */
-        assert(!(instData.ABS & 0x1));
-        assert(!(instData.ABS & 0x2));
-        assert(!(instData.ABS & 0x4));
-        assert(!(extData.NEG & 0x1));
-        assert(!(extData.NEG & 0x2));
-        assert(!(extData.NEG & 0x4));
-
         sdst = src0[src1.rawData() & 0x3f];
 
         sdst.write();
@@ -8435,16 +8463,6 @@ namespace VegaISA
         src0.read();
         src1.read();
         vdst.read();
-
-        /**
-         * input modifiers are supported by FP operations only
-         */
-        assert(!(instData.ABS & 0x1));
-        assert(!(instData.ABS & 0x2));
-        assert(!(instData.ABS & 0x4));
-        assert(!(extData.NEG & 0x1));
-        assert(!(extData.NEG & 0x2));
-        assert(!(extData.NEG & 0x4));
 
         vdst[src1.rawData() & 0x3f] = src0.rawData();
 
@@ -8535,7 +8553,7 @@ namespace VegaISA
 
         for (int lane = 0; lane < NumVecElemPerVecReg; ++lane) {
             if (wf->execMask(lane)) {
-                threadMask = ((1LL << lane) - 1LL);
+                threadMask = ((1ULL << lane) - 1ULL);
                 vdst[lane] = popCount(src0[lane] & bits(threadMask, 31, 0)) +
                              src1[lane];
             }
@@ -8585,7 +8603,7 @@ namespace VegaISA
 
         for (int lane = 0; lane < NumVecElemPerVecReg; ++lane) {
             if (wf->execMask(lane)) {
-                threadMask = ((1LL << lane) - 1LL);
+                threadMask = ((1ULL << lane) - 1ULL);
                 vdst[lane] = popCount(src0[lane] & bits(threadMask, 63, 32)) +
                              src1[lane];
             }

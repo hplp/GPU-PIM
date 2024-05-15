@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2022  Institute of Computing Technology, Chinese Academy
- *                     of Sciences
- * All rights reserved
+ * Copyright (c) 2024 Arm Limited
+ * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
  * not be construed as granting a license to any other intellectual
@@ -36,59 +35,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dev/virtio/rng.hh"
+#include "arch/arm/mpam.hh"
+#include "dev/arm/mpam.hh"
 
-#include "base/random.hh"
-#include "debug/VIORng.hh"
-#include "params/VirtIORng.hh"
-#include "sim/system.hh"
-
-namespace gem5
+namespace gem5::mpam
 {
 
-VirtIORng::VirtIORng(const Params &params)
-    : VirtIODeviceBase(params, ID_RNG, 0, 0),
-      qReq(params.system->physProxy, byteOrder, params.qSize, *this)
+uint64_t
+MSC::readPacketPartitionID(PacketPtr pkt) const
 {
-    registerQueue(qReq);
+    // get partition_id from PartitionFieldExtension
+    auto ext = pkt->req->getExtension<ArmISA::mpam::PartitionFieldExtension>();
+    // use default value if extension is not set
+    return (ext != nullptr) ? ext->getPartitionID() :
+        ArmISA::mpam::DEFAULT_PARTITION_ID;
 }
 
-VirtIORng::~VirtIORng()
-{
-}
-
-VirtIORng::RngQueue::RngQueue(PortProxy &proxy, ByteOrder bo, uint16_t size,
-    VirtIORng &_parent)
-    : VirtQueue(proxy, bo, size), parent(_parent)
-{
-}
-
-void
-VirtIORng::readConfig(PacketPtr pkt, Addr cfgOffset)
-{
-    // There are no configuration for RNG device
-    pkt->makeResponse();
-}
-
-void
-VirtIORng::RngQueue::trySend()
-{
-    DPRINTF(VIORng, "try send\n");
-
-    VirtDescriptor *d;
-    while ((d = consumeDescriptor())) {
-        DPRINTF(VIORng, "Got descriptor (len: %i)\n", d->size());
-        size_t len = 0;
-        while (len < d->size()) {
-            uint8_t byte = gem5::random_mt.random<uint8_t>();
-            d->chainWrite(len, &byte, sizeof(uint8_t));
-            ++len;
-        }
-
-        // Tell the guest that we are done with this descriptor.
-        produceDescriptor(d, len);
-        parent.kick();
-    }
-}
-
-} // namespace gem5
+} // namespace gem5::mpam

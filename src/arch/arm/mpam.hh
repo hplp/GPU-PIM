@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 ARM Limited
+ * Copyright (c) 2024 Arm Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -35,55 +35,82 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "partition_fields_extension.hh"
+#ifndef __ARCH_ARM_MPAM_HH__
+#define __ARCH_ARM_MPAM_HH__
 
-namespace gem5
+#include "base/extensible.hh"
+#include "mem/packet.hh"
+#include "mem/request.hh"
+
+namespace gem5::ArmISA::mpam
 {
 
-namespace partitioning_policy
+const uint64_t DEFAULT_PARTITION_ID = 0;
+const uint64_t DEFAULT_PARTITION_MONITORING_ID = 0;
+
+class PartitionFieldExtension : public Extension<Request,
+                                                 PartitionFieldExtension>
 {
+  public:
+    std::unique_ptr<ExtensionBase> clone() const override;
+    PartitionFieldExtension() = default;
 
-std::unique_ptr<ExtensionBase>
-PartitionFieldExtention::clone() const
-{
-    return std::make_unique<PartitionFieldExtention>(*this);
-}
+    /**
+    * _partitionID getter
+    * @return extension Partition ID
+    */
+    uint64_t getPartitionID() const;
 
-uint64_t
-PartitionFieldExtention::getPartitionID() const
-{
-    return this->_partitionID;
-}
+    /**
+    * _partitionMonitoringID getter
+    * @return extension Partition Monitoring ID
+    */
+    uint64_t getPartitionMonitoringID() const;
 
-uint64_t
-PartitionFieldExtention::getPartitionMonitoringID() const
-{
-    return this->_partitionMonitoringID;
-}
+    /**
+    * MPAM_NS getter
+    * @return True if targeting Non-Secure MPAM partition
+    */
+    bool getMpamNS() const;
 
-void
-PartitionFieldExtention::setPartitionID(uint64_t id)
-{
-    this->_partitionID = id;
-}
 
-void
-PartitionFieldExtention::setPartitionMonitoringID(uint64_t id)
-{
-    this->_partitionMonitoringID = id;
-}
+    /**
+    * _partitionID setter
+    * @param id Partition ID to set for the extension
+    */
+    void setPartitionID(uint64_t id);
 
-uint64_t
-readPacketPartitionID (PacketPtr pkt)
-{
-    // get partition_id from PartitionFieldExtention
-    std::shared_ptr<PartitionFieldExtention> ext =
-        pkt->req->getExtension<PartitionFieldExtention>();
+    /**
+    * _partitionMonitoringID setter
+    * @param id Partition Monitoring ID to set for the extension
+    */
+    void setPartitionMonitoringID(uint64_t id);
 
-    // use default value if extension is not set
-    return (ext != nullptr) ? ext->getPartitionID() : DEFAULT_PARTITION_ID;
-}
+    /**
+    * MPAM_NS setter
+    * @param ns True if targeting Non-Secure MPAM partition
+    */
+    void setMpamNS(bool ns);
 
-} // namespace partitioning_policy
+  private:
+    uint64_t _partitionID = DEFAULT_PARTITION_ID;
+    uint64_t _partitionMonitoringID = DEFAULT_PARTITION_MONITORING_ID;
+    bool _ns = true;
+};
 
-} // namespace gem5
+/** Partition ID data type */
+using PartID = uint16_t;
+/** Partition Manager data type */
+using PMG = uint8_t;
+
+/** Tag a memory request with MPAM information
+ * @param tc pointer to the ThreadContext
+ * @param req reference to the pointer of the memory request to be tagged
+ * @param ind "instruction not data" to differentiate between
+ *            a fetch request and a data memory access
+ */
+void tagRequest(ThreadContext *tc, const RequestPtr &req, bool ind);
+
+} // namespace gem5::ArmISA::mpam
+
+#endif // __ARCH_ARM_MPAM_HH__

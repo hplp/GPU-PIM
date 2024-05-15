@@ -864,6 +864,25 @@ ComputeUnit::DataPort::handleResponse(PacketPtr pkt)
         //  - kernel end
         //  - non-kernel mem sync
 
+        // Non-kernel mem sync not from an instruction
+        if (!gpuDynInst) {
+            // If there is no dynamic instruction, a CU must be present.
+            ComputeUnit *cu = sender_state->computeUnit;
+            assert(cu != nullptr);
+
+            if (pkt->req->isInvL2()) {
+                cu->shader->decNumOutstandingInvL2s();
+                assert(cu->shader->getNumOutstandingInvL2s() >= 0);
+            } else {
+                panic("Unknown MemSyncResp not from an instruction");
+            }
+
+            // Cleanup and return, no other response events needed.
+            delete pkt->senderState;
+            delete pkt;
+            return true;
+        }
+
         // Kernel Launch
         // wavefront was nullptr when launching kernel, so it is meaningless
         // here (simdId=-1, wfSlotId=-1)
@@ -955,6 +974,14 @@ ComputeUnit::ScalarDataPort::recvTimingResp(PacketPtr pkt)
 bool
 ComputeUnit::ScalarDataPort::handleResponse(PacketPtr pkt)
 {
+    // From scalar cache invalidate that was issued at kernel start.
+    if (pkt->req->isKernel()) {
+        delete pkt->senderState;
+        delete pkt;
+
+        return true;
+    }
+
     assert(!pkt->req->isKernel());
 
     // retrieve sender state
@@ -1039,6 +1066,9 @@ ComputeUnit::SQCPort::recvTimingResp(PacketPtr pkt)
      */
     if (sender_state->wavefront != nullptr) {
         computeUnit->handleSQCReturn(pkt);
+    } else {
+        delete pkt->senderState;
+        delete pkt;
     }
 
     return true;
@@ -1404,6 +1434,23 @@ ComputeUnit::injectGlobalMemFence(GPUDynInstPtr gpuDynInst,
 }
 
 void
+ComputeUnit::sendInvL2(Addr paddr)
+{
+    auto req = std::make_shared<Request>(paddr, 64, 0, vramRequestorId());
+    req->setCacheCoherenceFlags(Request::GL2_CACHE_INV);
+
+    auto pkt = new Packet(req, MemCmd::MemSyncReq);
+    pkt->pushSenderState(
+       new ComputeUnit::DataPort::SenderState(this, 0, nullptr));
+
+    EventFunctionWrapper *mem_req_event = memPort[0].createMemReqEvent(pkt);
+
+    schedule(mem_req_event, curTick() + req_tick_latency);
+
+    shader->incNumOutstandingInvL2s();
+}
+
+void
 ComputeUnit::DataPort::processMemRespEvent(PacketPtr pkt)
 {
     DataPort::SenderState *sender_state =
@@ -1699,18 +1746,22 @@ ComputeUnit::DataPort::processMemReqEvent(PacketPtr pkt)
         SystemHubEvent *resp_event = new SystemHubEvent(pkt, this);
         compute_unit->shader->systemHub->sendRequest(pkt, resp_event);
     } else if (!(sendTimingReq(pkt))) {
-        retries.push_back(std::make_pair(pkt, gpuDynInst));
+        retries.emplace_back(pkt, gpuDynInst);
 
-        DPRINTF(GPUPort,
-                "CU%d: WF[%d][%d]: index %d, addr %#x data req failed!\n",
-                compute_unit->cu_id, gpuDynInst->simdId, gpuDynInst->wfSlotId,
-                id, pkt->req->getPaddr());
+        if (gpuDynInst) {
+            DPRINTF(GPUPort,
+                    "CU%d: WF[%d][%d]: index %d, addr %#x data req failed!\n",
+                    compute_unit->cu_id, gpuDynInst->simdId,
+                    gpuDynInst->wfSlotId, id, pkt->req->getPaddr());
+        }
     } else {
-        DPRINTF(GPUPort,
-                "CU%d: WF[%d][%d]: gpuDynInst: %d, index %d, addr %#x data "
-                "req sent!\n", compute_unit->cu_id, gpuDynInst->simdId,
-                gpuDynInst->wfSlotId, gpuDynInst->seqNum(), id,
-                pkt->req->getPaddr());
+        if (gpuDynInst) {
+            DPRINTF(GPUPort,
+                    "CU%d: WF[%d][%d]: gpuDynInst: %d, index %d, addr %#x data"
+                    " req sent!\n", compute_unit->cu_id, gpuDynInst->simdId,
+                    gpuDynInst->wfSlotId, gpuDynInst->seqNum(), id,
+                    pkt->req->getPaddr());
+        }
     }
 }
 
@@ -1732,7 +1783,7 @@ ComputeUnit::ScalarDataPort::MemReqEvent::process()
         SystemHubEvent *resp_event = new SystemHubEvent(pkt, &scalarDataPort);
         compute_unit->shader->systemHub->sendRequest(pkt, resp_event);
     } else if (!(scalarDataPort.sendTimingReq(pkt))) {
-        scalarDataPort.retries.push_back(pkt);
+        scalarDataPort.retries.emplace_back(pkt);
 
         DPRINTF(GPUPort,
                 "CU%d: WF[%d][%d]: addr %#x data req failed!\n",
@@ -2436,15 +2487,15 @@ ComputeUnit::ComputeUnitStats::ComputeUnitStats(statistics::Group *parent,
     instCyclesLdsPerSimd.init(cu->numVectorALUs);
 
     hitsPerTLBLevel.init(4);
-    execRateDist.init(0, 10, 2);
-    ldsBankConflictDist.init(0, cu->wfSize(), 2);
+    execRateDist.init(0, 10-1, 2);
+    ldsBankConflictDist.init(0, cu->wfSize()-1, 2);
 
     pageDivergenceDist.init(1, cu->wfSize(), 4);
     controlFlowDivergenceDist.init(1, cu->wfSize(), 4);
     activeLanesPerGMemInstrDist.init(1, cu->wfSize(), 4);
     activeLanesPerLMemInstrDist.init(1, cu->wfSize(), 4);
 
-    headTailLatency.init(0, 1000000, 10000).flags(statistics::pdf |
+    headTailLatency.init(0, 1000000-1, 10000).flags(statistics::pdf |
         statistics::oneline);
     waveLevelParallelism.init(0, n_wf * cu->numVectorALUs, 1);
     instInterleave.init(cu->numVectorALUs, 0, 20, 1);

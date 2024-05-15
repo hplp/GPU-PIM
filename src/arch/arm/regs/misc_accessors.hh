@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2024 ARM Limited
- * All rights reserved.
+ * Copyright (c) 2024 Arm Limited
+ * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
  * not be construed as granting a license to any other intellectual
@@ -35,68 +35,80 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __MEM_CACHE_TAGS_PARTITIONING_POLICIES_FIELD_EXTENTION_HH__
-#define __MEM_CACHE_TAGS_PARTITIONING_POLICIES_FIELD_EXTENTION_HH__
+#ifndef __ARCH_ARM_REGS_MISC_ACCESSORS_HH__
+#define __ARCH_ARM_REGS_MISC_ACCESSORS_HH__
 
-#include "base/extensible.hh"
-#include "mem/packet.hh"
-#include "mem/request.hh"
+#include "arch/arm/regs/misc_types.hh"
+#include "cpu/thread_context.hh"
 
 namespace gem5
 {
 
-namespace partitioning_policy
+namespace ArmISA
 {
 
-const uint64_t DEFAULT_PARTITION_ID = 0;
-const uint64_t DEFAULT_PARTITION_MONITORING_ID = 0;
-
-class PartitionFieldExtention : public Extension<Request,
-                                                 PartitionFieldExtention>
+namespace misc_regs
 {
-  public:
-    std::unique_ptr<ExtensionBase> clone() const override;
-    PartitionFieldExtention() = default;
 
-    /**
-    * _partitionID getter
-    * @return extension Partition ID
-    */
-    uint64_t getPartitionID() const;
-
-    /**
-    * _partitionMonitoringID getter
-    * @return extension Partition Monitoring ID
-    */
-    uint64_t getPartitionMonitoringID() const;
-
-    /**
-    * _partitionID setter
-    * @param id Partition ID to set for the extension
-    */
-    void setPartitionID(uint64_t id);
-
-    /**
-    * _partitionMonitoringID setter
-    * @param id Partition Monitoring ID to set for the extension
-    */
-    void setPartitionMonitoringID(uint64_t id);
-
-  private:
-    uint64_t _partitionID = DEFAULT_PARTITION_ID;
-    uint64_t _partitionMonitoringID = DEFAULT_PARTITION_MONITORING_ID;
+struct FarAccessor
+{
+    using type = RegVal;
+    static const MiscRegIndex el0 = NUM_MISCREGS;
+    static const MiscRegIndex el1 = MISCREG_FAR_EL1;
+    static const MiscRegIndex el2 = MISCREG_FAR_EL2;
+    static const MiscRegIndex el3 = MISCREG_FAR_EL3;
 };
 
-/**
-* Helper function to retrieve PartitionID from a packet; Returns packet
-* PartitionID if available or DEFAULT_PARTITION_ID if extention is not set
-* @param pkt pointer to packet (PacketPtr)
-* @return packet PartitionID.
-*/
-uint64_t readPacketPartitionID (PacketPtr pkt);
+struct MpamAccessor
+{
+    using type = MPAM;
+    static const MiscRegIndex el0 = MISCREG_MPAM0_EL1;
+    static const MiscRegIndex el1 = MISCREG_MPAM1_EL1;
+    static const MiscRegIndex el2 = MISCREG_MPAM2_EL2;
+    static const MiscRegIndex el3 = MISCREG_MPAM3_EL3;
+};
 
-} // namespace partitioning_policy
+template <typename RegAccessor>
+MiscRegIndex
+getRegVersion(ExceptionLevel el)
+{
+    switch (el) {
+      case EL0:
+        return RegAccessor::el0;
+      case EL1:
+        return RegAccessor::el1;
+      case EL2:
+        return RegAccessor::el2;
+      case EL3:
+        return RegAccessor::el3;
+      default:
+        panic("Invalid EL\n");
+    }
+}
 
+template <typename RegAccessor>
+typename RegAccessor::type
+readRegister(ThreadContext *tc, ExceptionLevel el)
+{
+    return tc->readMiscReg(getRegVersion<RegAccessor>(el));
+}
+
+template <typename RegAccessor>
+typename RegAccessor::type
+readRegisterNoEffect(ThreadContext *tc, ExceptionLevel el)
+{
+    return tc->readMiscRegNoEffect(getRegVersion<RegAccessor>(el));
+}
+
+template <typename RegAccessor>
+void
+writeRegister(ThreadContext *tc, RegVal val, ExceptionLevel el)
+{
+    tc->setMiscReg(getRegVersion<RegAccessor>(el), val);
+}
+
+} // namespace misc_regs
+} // namespace ArmISA
 } // namespace gem5
 
-#endif // __MEM_CACHE_TAGS_PARTITIONING_POLICIES_FIELD_EXTENTION_HH__
+#endif // __ARCH_ARM_REGS_MISC_ACCESSORS_HH__
