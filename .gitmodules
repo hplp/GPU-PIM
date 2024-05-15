@@ -1,0 +1,6 @@
+[submodule "Aquabolt"]
+	path = Aquabolt
+	url = https://github.com/ersin-cukurtas/PIMsimulator
+[submodule "deteq"]
+	path = deteq
+	url = https://github.com/hplp/deteq
