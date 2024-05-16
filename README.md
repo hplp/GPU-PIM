@@ -1,26 +1,23 @@
 # GPU-PIM simulator
 
 This is a fork from the original gem5 to create a GPU hosted PIM simulator combining
-AMD gpu models with Aquabolt PIM simulator.
+AMD gpu models with Aquabolt PIM simulator. Refer to the main website for gem5 requirements.
+This model is built on Ubuntu 20.
 
-# The gem5 Simulator
-
-This is the repository for the gem5 simulator. It contains the full source code
-for the simulator and all tests and regressions.
-
-The gem5 simulator is a modular platform for computer-system architecture
-research, encompassing system-level architecture as well as processor
-microarchitecture. It is primarily used to evaluate new hardware designs,
-system software changes, and compile-time and run-time system optimizations.
+This is still an ongoing work. This repo will give you basic results, but we are working on making
+application development easier with a general API. To get the results build the gem5 object and run
+makefile.
 
 The main website can be found at <http://www.gem5.org>.
 
-## Building gem5
+## Building
 
-Once you have all dependencies resolved, execute
-`scons build/ALL/gem5.opt` to build an optimized version of the gem5 binary
-(`gem5.opt`) containing all gem5 ISAs. If you only wish to compile gem5 to
-include a single ISA, you can replace `ALL` with the name of the ISA. Valid
-options include `ARM`, `NULL`, `MIPS`, `POWER`, `RISCV`, `SPARC`, and `X86`
-The complete list of options can be found in the build_opts directory.
+Once you have all dependencies resolved, run `scons build/VEGA_X86/gem5.opt configs/example/gpufs/vega10,py` to build the executable.
 
+Run `make` to get Aquabolt test results for microbenchmarks.
+
+## ML applications
+
+We have an ongoing effort to build ML applications on this platform. You can find detailed documentation under /deteq folder.
+We are still working on automating running ML applications on this platform, but you can find the code to trace ONNX graphs and
+evaluate different quantization options.
