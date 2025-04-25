@@ -1,3 +1,5 @@
+This is the official repository for GPU-PIM Co-design project funded by LPS, BAH.
+
 # The gem5 Simulator
 
 This is the repository for the gem5 simulator. It contains the full source code
