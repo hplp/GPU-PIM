@@ -1,4 +1,4 @@
-# Copyright (c) 2021 Advanced Micro Devices, Inc.
+# Copyright (c) 2021-2024 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -82,9 +82,10 @@ def addRunFSOptions(parser):
         help="The second disk image to mount (/dev/sdb)",
     )
     parser.add_argument("--kernel", default=None, help="Linux kernel to boot")
-    parser.add_argument("--gpu-rom", default=None, help="GPU BIOS to load")
     parser.add_argument(
-        "--gpu-mmio-trace", default=None, help="GPU MMIO trace to load"
+        "--gpu-ipt",
+        default=None,
+        help="Intended only for gem5 developers. IP discovery table to load",
     )
     parser.add_argument(
         "--checkpoint-before-mmios",
@@ -112,7 +113,7 @@ def addRunFSOptions(parser):
         "--dgpu-mem-size",
         action="store",
         type=str,
-        default="16GB",
+        default="16GiB",
         help="Specify the dGPU physical memory size",
     )
     parser.add_argument(
@@ -134,23 +135,41 @@ def addRunFSOptions(parser):
     parser.add_argument(
         "--gpu-device",
         default="Vega10",
-        choices=["Vega10", "MI100", "MI200"],
-        help="GPU model to run: Vega10 (gfx900), MI100 (gfx908), or "
-        "MI200 (gfx90a)",
+        choices=["Vega10", "MI100", "MI200", "MI300X"],
+        help="GPU model to run: Vega10 (gfx900), MI100 (gfx908), MI200 "
+        "(gfx90a), or MI300X (gfx942).",
     )
 
     parser.add_argument(
-        "--debug-at-gpu-kernel",
+        "--debug-at-gpu-task",
         type=int,
         default=-1,
-        help="Turn on debug flags starting with this kernel",
+        help="Turn on debug flags starting with this task (counting both blit"
+        " and non-blit kernels)",
     )
 
     parser.add_argument(
-        "--exit-at-gpu-kernel",
+        "--exit-at-gpu-task",
         type=int,
         default=-1,
-        help="Exit simulation after running this many kernels",
+        help="Exit simulation after running this many tasks (counting both "
+        "blit and non-blit kernels)",
+    )
+
+    parser.add_argument(
+        "--exit-after-gpu-kernel",
+        type=int,
+        default=-1,
+        help="Exit simulation after completing this (non-blit) kernel",
+    )
+
+    parser.add_argument(
+        "--skip-until-gpu-kernel",
+        type=int,
+        default=0,
+        help="Skip (non-blit) kernels until reaching this kernel. Note that "
+        "this can impact correctness (the skipped kernels are completely "
+        "skipped, not fast forwarded)",
     )
 
     parser.add_argument(
@@ -171,10 +190,42 @@ def addRunFSOptions(parser):
     )
 
     parser.add_argument(
-        "--no-kvm-perf",
+        "--kvm-perf",
         default=False,
         action="store_true",
-        help="Disable KVM perf counters (use this with LSF / ETX)",
+        help="Enable KVM perf counters",
+    )
+
+    parser.add_argument(
+        "--tcp-rp",
+        type=str,
+        default="TreePLRURP",
+        choices=ObjectList.rp_list.get_names(),
+        help="cache replacement policy" "policy for tcp",
+    )
+
+    parser.add_argument(
+        "--tcc-rp",
+        type=str,
+        default="TreePLRURP",
+        choices=ObjectList.rp_list.get_names(),
+        help="cache replacement policy" "policy for tcc",
+    )
+
+    # sqc rp both changes sqc rp and scalar cache rp
+    parser.add_argument(
+        "--sqc-rp",
+        type=str,
+        default="TreePLRURP",
+        choices=ObjectList.rp_list.get_names(),
+        help="cache replacement policy" "policy for sqc",
+    )
+
+    parser.add_argument(
+        "--gpu-progress-interval",
+        type=int,
+        default=0,
+        help="Frequency in exec cycles of GPU progress prints",
     )
 
 
@@ -198,16 +249,6 @@ def runGpuFSSystem(args):
         math.ceil(float(n_cu) / args.cu_per_scalar_cache)
     )
 
-    # Verify MMIO trace is valid. This is only needed for Vega10 simulations.
-    # The md5sum refers to the md5sum of the Vega10 MMIO hardware trace in
-    # the gem5-resources repository. By checking it here, we avoid potential
-    # errors that would cause the driver not to load and simulations to fail.
-    if args.gpu_device == "Vega10":
-        mmio_file = open(args.gpu_mmio_trace, "rb")
-        mmio_md5 = hashlib.md5(mmio_file.read()).hexdigest()
-        if mmio_md5 != "c4ff3326ae8a036e329b8b595c83bd6d":
-            m5.util.panic("MMIO file does not match gem5 resources")
-
     system = makeGpuFSSystem(args)
 
     root = Root(
@@ -230,8 +271,9 @@ def runGpuFSSystem(args):
 
     print("Running the simulation")
     sim_ticks = args.abs_max_tick
-    kernels_launched = 0
-    if args.debug_at_gpu_kernel != -1:
+    kernels_completed = 0
+    tasks_completed = 0
+    if args.debug_at_gpu_task != -1:
         m5.trace.disable()
 
     exit_event = m5.simulate(sim_ticks)
@@ -249,16 +291,27 @@ def runGpuFSSystem(args):
             m5.checkpoint(args.checkpoint_dir)
             break
         elif "GPU Kernel Completed" in exit_event.getCause():
-            kernels_launched += 1
+            if kernels_completed == args.exit_after_gpu_kernel:
+                print(f"Exiting after GPU kernel {kernels_completed}")
+                break
+            kernels_completed += 1
+            tasks_completed += 1
+        elif "GPU Blit Kernel Completed" in exit_event.getCause():
+            tasks_completed += 1
+        elif "Skipping GPU Kernel" in exit_event.getCause():
+            print(f"Skipping GPU kernel {kernels_completed}")
+            kernels_completed += 1
+            tasks_completed += 1
         else:
             print(
                 f"Unknown exit event: {exit_event.getCause()}. Continuing..."
             )
 
-        if kernels_launched == args.debug_at_gpu_kernel:
+        if tasks_completed == args.debug_at_gpu_task:
+            print(f"Enabling debug flags @ GPU task {tasks_completed}")
             m5.trace.enable()
-        if kernels_launched == args.exit_at_gpu_kernel:
-            print(f"Exiting @ GPU kernel {kernels_launched}")
+        if tasks_completed == args.exit_at_gpu_task:
+            print(f"Exiting @ GPU task {tasks_completed}")
             break
 
         exit_event = m5.simulate(sim_ticks - m5.curTick())

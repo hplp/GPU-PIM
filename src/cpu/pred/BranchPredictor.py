@@ -1,4 +1,5 @@
 # Copyright (c) 2022-2023 The University of Edinburgh
+# Copyright (c) 2024 Technical University of Munich
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -38,6 +39,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from m5.objects.ClockedObject import ClockedObject
+from m5.objects.IndexingPolicies import *
+from m5.objects.ReplacementPolicies import *
 from m5.params import *
 from m5.proxy import *
 from m5.SimObject import *
@@ -83,6 +86,38 @@ class BranchTargetBuffer(ClockedObject):
     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
 
 
+class BTBIndexingPolicy(SimObject):
+    type = "BTBIndexingPolicy"
+    abstract = True
+    cxx_class = "gem5::IndexingPolicyTemplate<gem5::BTBTagType>"
+    cxx_header = "cpu/pred/btb_entry.hh"
+    cxx_template_params = ["class Types"]
+
+    # Get the associativity
+    assoc = Param.Int(Parent.assoc, "associativity")
+
+
+class BTBSetAssociative(BTBIndexingPolicy):
+    type = "BTBSetAssociative"
+    cxx_class = "gem5::BTBSetAssociative"
+    cxx_header = "cpu/pred/btb_entry.hh"
+
+    # Get the number of entries in the BTB from the parent
+    num_entries = Param.Unsigned(
+        Parent.numEntries, "Number of entries in the BTB"
+    )
+
+    # Set shift for the index. Ignore lower 2 bits for a 4 byte instruction.
+    set_shift = Param.Unsigned(2, "Number of bits to shift PC to get index")
+
+    # Total number of bits in the tag.
+    # This is above the index and offset bit
+    tag_bits = Param.Unsigned(64, "number of bits in the tag")
+
+    # Number of threads sharing the BTB
+    numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
+
+
 class SimpleBTB(BranchTargetBuffer):
     type = "SimpleBTB"
     cxx_class = "gem5::branch_prediction::SimpleBTB"
@@ -92,6 +127,19 @@ class SimpleBTB(BranchTargetBuffer):
     tagBits = Param.Unsigned(16, "Size of the BTB tags, in bits")
     instShiftAmt = Param.Unsigned(
         Parent.instShiftAmt, "Number of bits to shift instructions by"
+    )
+    associativity = Param.Unsigned(1, "BTB associativity")
+    btbReplPolicy = Param.BaseReplacementPolicy(
+        LRURP(), "BTB replacement policy"
+    )
+    btbIndexingPolicy = Param.BTBIndexingPolicy(
+        BTBSetAssociative(
+            assoc=Parent.associativity,
+            num_entries=Parent.numEntries,
+            set_shift=Parent.instShiftAmt,
+            numThreads=1,
+        ),
+        "BTB indexing policy",
     )
 
 
@@ -125,7 +173,9 @@ class SimpleIndirectPredictor(IndirectPredictor):
         "pipeline depth or a high value e.g. 256 to make it 'unlimited'.",
     )
     indirectGHRBits = Param.Unsigned(13, "Indirect GHR number of bits")
-    instShiftAmt = Param.Unsigned(2, "Number of bits to shift instructions by")
+    instShiftAmt = Param.Unsigned(
+        Parent.instShiftAmt, "Number of bits to shift instructions by"
+    )
 
 
 class BranchPredictor(SimObject):
@@ -135,7 +185,20 @@ class BranchPredictor(SimObject):
     abstract = True
 
     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
-    instShiftAmt = Param.Unsigned(2, "Number of bits to shift instructions by")
+    instShiftAmt = Param.Unsigned(
+        0,
+        "The `instShiftAmt` is intended for fixed size instruction sets "
+        "(Arm,RISC-V) to shift the FULL PC by `n` bits (e.g. 2 for 4 byte "
+        "instructions) as the two least significant bits are always zero and "
+        "therefore not useful for prediction. For variable size instruction "
+        "sets (x86) all bits are used and the `instShiftAmt` should be set "
+        "to 0.",
+    )
+    speculativeHistUpdate = Param.Bool(
+        True,
+        "Use speculative update for histories",
+    )
+
     requiresBTBHit = Param.Bool(
         False,
         "Requires the BTB to hit for returns and indirect branches. For an"
@@ -154,6 +217,14 @@ class BranchPredictor(SimObject):
         SimpleIndirectPredictor(),
         "Indirect branch predictor, set to NULL to disable "
         "indirect predictions",
+    )
+
+    # Taken only history as used in most modern server CPUs.
+    takenOnlyHistory = Param.Bool(
+        False,
+        "Build the global history only from taken branches (2-bit) "
+        "instead of direction history from all branches. Widely implemented "
+        "in modern server CPUs: https://ieeexplore.ieee.org/document/9246215",
     )
 
 
@@ -241,7 +312,15 @@ class TAGEBase(SimObject):
     noSkip = VectorParam.Bool([], "Vector of enabled TAGE tables")
 
     speculativeHistUpdate = Param.Bool(
-        True, "Use speculative update for histories"
+        Parent.speculativeHistUpdate, "Use speculative update for histories"
+    )
+
+    # Taken only history as used in most modern server CPUs.
+    takenOnlyHistory = Param.Bool(
+        Parent.takenOnlyHistory,
+        "Build the global history only from taken branches (2-bit) "
+        "instead of direction history from all branches. Widely implemented "
+        "in modern server CPUs: https://ieeexplore.ieee.org/document/9246215",
     )
 
 
@@ -321,8 +400,6 @@ class TAGE_SC_L_TAGE(TAGEBase):
     logUResetPeriod = 10
     initialTCounterValue = 1 << 9
     useAltOnNaBits = 5
-    # TODO No speculation implemented as of now
-    speculativeHistUpdate = False
 
     # This size does not set the final sizes of the tables (it is just used
     # for some calculations)
@@ -514,6 +591,10 @@ class StatisticalCorrector(SimObject):
     cxx_header = "cpu/pred/statistical_corrector.hh"
     abstract = True
 
+    instShiftAmt = Param.Unsigned(
+        Parent.instShiftAmt, "Number of bits to shift instructions by"
+    )
+
     # Statistical corrector parameters
 
     numEntriesFirstLocalHistories = Param.Unsigned(
@@ -569,6 +650,11 @@ class StatisticalCorrector(SimObject):
         0, "Initial pUpdate threshold counter value"
     )
 
+    speculativeHistUpdate = Param.Bool(
+        Parent.speculativeHistUpdate,
+        "Use speculative update for the statistical corrector",
+    )
+
 
 # TAGE-SC-L branch predictor as desribed in
 # https://www.jilp.org/cbp2016/paper/AndreSeznecLimited.pdf
@@ -588,7 +674,9 @@ class TAGE_SC_L(LTAGE):
     cxx_header = "cpu/pred/tage_sc_l.hh"
     abstract = True
 
-    statistical_corrector = Param.StatisticalCorrector("Statistical Corrector")
+    statistical_corrector = Param.StatisticalCorrector(
+        "Statistical Corrector. Set to NULL to disable it"
+    )
 
 
 class TAGE_SC_L_64KB_LoopPredictor(TAGE_SC_L_LoopPredictor):
@@ -868,7 +956,6 @@ class MPP_TAGE(TAGEBase):
     logUResetPeriod = 10
     initialTCounterValue = 0
     numUseAltOnNa = 512
-    speculativeHistUpdate = False
 
 
 class MPP_LoopPredictor(LoopPredictor):
@@ -987,6 +1074,7 @@ class MultiperspectivePerceptronTAGE64KB(MultiperspectivePerceptronTAGE):
     cxx_header = "cpu/pred/multiperspective_perceptron_tage_64KB.hh"
 
     budgetbits = 65536 * 8 + 2048
+    speculativeHistUpdate = False
 
     tage = MPP_TAGE()
     loop_predictor = MPP_LoopPredictor()
@@ -1037,6 +1125,7 @@ class MultiperspectivePerceptronTAGE8KB(MultiperspectivePerceptronTAGE):
     cxx_header = "cpu/pred/multiperspective_perceptron_tage_8KB.hh"
 
     budgetbits = 8192 * 8 + 2048
+    speculativeHistUpdate = False
 
     tage = MPP_TAGE_8KB()
     loop_predictor = MPP_LoopPredictor_8KB()

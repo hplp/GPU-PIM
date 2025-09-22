@@ -24,8 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-""" Channeled "generic" DDR memory controllers
-"""
+"""Channeled "generic" DDR memory controllers"""
 
 from math import log
 from typing import (
@@ -186,6 +185,10 @@ class ChanneledMemory(AbstractMemorySystem):
         return [ctrl for ctrl in self.mem_ctrl]
 
     @overrides(AbstractMemorySystem)
+    def get_mem_interfaces(self) -> List[DRAMInterface]:
+        return self._dram
+
+    @overrides(AbstractMemorySystem)
     def get_size(self) -> int:
         return self._size
 
@@ -198,8 +201,12 @@ class ChanneledMemory(AbstractMemorySystem):
             raise Exception(
                 "Multi channel memory controller requires a single range "
                 "which matches the memory's size.\n"
-                f"The range size: {range[0].size()}\n"
+                f"The range size: {ranges[0].size()}\n"
                 f"This memory's size: {self._size}"
             )
         self._mem_range = ranges[0]
         self._interleave_addresses()
+
+    @overrides(AbstractMemorySystem)
+    def get_uninterleaved_range(self) -> List[AddrRange]:
+        return [self._mem_range]

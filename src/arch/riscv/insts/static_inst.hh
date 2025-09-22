@@ -57,8 +57,6 @@ class RiscvStaticInst : public StaticInst
         StaticInst(_mnemonic, __opClass), machInst(_machInst)
     {}
 
-    bool alignmentOk(ExecContext* xc, Addr addr, Addr size) const;
-
     template <typename T>
     T
     rvSelect(T v32, T v64) const
@@ -87,6 +85,8 @@ class RiscvStaticInst : public StaticInst
         pc.advance();
         tc->pcState(pc);
     }
+
+    uint64_t getEMI() const override { return machInst; }
 
     std::unique_ptr<PCStateBase>
     buildRetPC(const PCStateBase &cur_pc,

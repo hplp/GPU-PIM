@@ -59,7 +59,7 @@ requires(isa_required=ISA.POWER)
 cache_hierarchy = NoCache()
 
 # We use a single channel DDR4_2400 memory system
-memory = SingleChannelDDR4_2400(size="32MB")
+memory = SingleChannelDDR4_2400(size="32MiB")
 
 # We use a simple ATOMIC processor with one core.
 processor = SimpleProcessor(
@@ -75,7 +75,9 @@ board = SimpleBoard(
     cache_hierarchy=cache_hierarchy,
 )
 
-board.set_se_binary_workload(obtain_resource("power-hello"))
+board.set_se_binary_workload(
+    obtain_resource("power-hello", resource_version="1.0.0")
+)
 
 # Lastly we run the simulation.
 simulator = Simulator(board=board)

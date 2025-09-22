@@ -146,12 +146,12 @@ args = parser.parse_args()
 # Setup the cachie hierarchy.
 
 if args.mem_system == "classic":
-    from gem5.components.cachehierarchies.classic.private_l1_private_l2_cache_hierarchy import (
-        PrivateL1PrivateL2CacheHierarchy,
+    from gem5.components.cachehierarchies.classic.private_l1_private_l2_walk_cache_hierarchy import (
+        PrivateL1PrivateL2WalkCacheHierarchy,
     )
 
-    cache_hierarchy = PrivateL1PrivateL2CacheHierarchy(
-        l1d_size="32kB", l1i_size="32kB", l2_size="256kB"
+    cache_hierarchy = PrivateL1PrivateL2WalkCacheHierarchy(
+        l1d_size="32KiB", l1i_size="32KiB", l2_size="256KiB"
     )
 elif args.mem_system == "mesi_two_level":
     from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import (
@@ -159,17 +159,17 @@ elif args.mem_system == "mesi_two_level":
     )
 
     cache_hierarchy = MESITwoLevelCacheHierarchy(
-        l1i_size="32kB",
+        l1i_size="32KiB",
         l1i_assoc=8,
-        l1d_size="32kB",
+        l1d_size="32KiB",
         l1d_assoc=8,
-        l2_size="256kB",
+        l2_size="256KiB",
         l2_assoc=16,
         num_l2_banks=1,
     )
 
 # Setup the memory system.
-memory = SingleChannelDDR3_1600(size="3GB")
+memory = SingleChannelDDR3_1600(size="3GiB")
 
 roi_type = get_cpu_type_from_str(args.cpu)
 if args.boot_cpu != None:
@@ -204,10 +204,14 @@ command = (
 
 board.set_kernel_disk_workload(
     kernel=obtain_resource(
-        "x86-linux-kernel-5.4.49", resource_directory=args.resource_directory
+        "x86-linux-kernel-5.4.49",
+        resource_directory=args.resource_directory,
+        resource_version="1.0.0",
     ),
     disk_image=obtain_resource(
-        "x86-parsec", resource_directory=args.resource_directory
+        "x86-parsec",
+        resource_directory=args.resource_directory,
+        resource_version="1.0.0",
     ),
     readfile_contents=command,
 )

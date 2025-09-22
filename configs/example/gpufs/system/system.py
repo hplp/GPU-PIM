@@ -57,8 +57,8 @@ def makeGpuFSSystem(args):
     ]
     cmdline = " ".join(boot_options)
 
-    if MemorySize(args.mem_size) < MemorySize("2GB"):
-        panic("Need at least 2GB of system memory to load amdgpu module")
+    if MemorySize(args.mem_size) < MemorySize("2GiB"):
+        panic("Need at least 2GiB of system memory to load amdgpu module")
 
     # Use the common FSConfig to setup a Linux X86 System
     (TestCPUClass, test_mem_mode) = Simulation.getCPUClass(args.cpu_type)
@@ -89,7 +89,7 @@ def makeGpuFSSystem(args):
     )
 
     # Setup VGA ROM region
-    system.shadow_rom_ranges = [AddrRange(0xC0000, size=Addr("128kB"))]
+    system.shadow_rom_ranges = [AddrRange(0xC0000, size=Addr("128KiB"))]
 
     # Create specified number of CPUs. GPUFS really only needs one.
     system.cpu = [
@@ -108,18 +108,26 @@ def makeGpuFSSystem(args):
     system.cpu.append(shader)
 
     # This arbitrary address is something in the X86 I/O hole
-    hsapp_gpu_map_paddr = 0xE00000000
+    hsapp_gpu_map_paddr = 0xE0000000
     hsapp_pt_walker = VegaPagetableWalker()
     gpu_hsapp = HSAPacketProcessor(
         pioAddr=hsapp_gpu_map_paddr,
         numHWQueues=args.num_hw_queues,
         walker=hsapp_pt_walker,
     )
-    dispatcher_exit_events = True if args.exit_at_gpu_kernel > -1 else False
+    dispatcher_exit_events = False
+    if args.exit_at_gpu_task > -1:
+        dispatcher_exit_events = True
+    if args.exit_after_gpu_kernel > -1:
+        dispatcher_exit_events = True
     dispatcher = GPUDispatcher(kernel_exit_events=dispatcher_exit_events)
     cp_pt_walker = VegaPagetableWalker()
+    target_kernel = args.skip_until_gpu_kernel
     gpu_cmd_proc = GPUCommandProcessor(
-        hsapp=gpu_hsapp, dispatcher=dispatcher, walker=cp_pt_walker
+        hsapp=gpu_hsapp,
+        dispatcher=dispatcher,
+        walker=cp_pt_walker,
+        target_non_blit_kernel_id=target_kernel,
     )
     shader.dispatcher = dispatcher
     shader.gpu_cmd_proc = gpu_cmd_proc
@@ -163,6 +171,30 @@ def makeGpuFSSystem(args):
             0x7A000,
         ]
         sdma_sizes = [0x1000] * 5
+    elif args.gpu_device == "MI300X":
+        # These MMIO addresses are based on the IP discovery file associated
+        # with the disk image. Changes to these values require changes to the
+        # discovery file base addresses.
+        num_sdmas = 16
+        sdma_bases = [
+            0x4980,
+            0x6180,
+            0x65000,
+            0x66000,
+            0x84980,
+            0x86180,
+            0xE5000,
+            0xE6000,
+            0x104980,
+            0x106180,
+            0x165000,
+            0x166000,
+            0x184980,
+            0x186180,
+            0x1E5000,
+            0x1E6000,
+        ]
+        sdma_sizes = [0x1000] * num_sdmas
     else:
         m5.util.panic(f"Unknown GPU device {args.gpu_device}")
 
@@ -180,12 +212,63 @@ def makeGpuFSSystem(args):
 
     system.pc.south_bridge.gpu.sdmas = sdma_engines
 
-    # Setup PM4 packet processor
-    pm4_pkt_proc = PM4PacketProcessor()
-    system.pc.south_bridge.gpu.pm4_pkt_proc = pm4_pkt_proc
+    # Setup PM4 packet processors
+    pm4_procs = []
+    if args.gpu_device == "MI300X":
+        # These MMIO addresses are based on the IP discovery file associated
+        # with the disk image. Changes to these values require changes to the
+        # discovery file base addresses.
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=0, mmio_range=AddrRange(start=0xC000, end=0xD000)
+            )
+        )
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=1, mmio_range=AddrRange(start=0x4C000, end=0x4D000)
+            )
+        )
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=2, mmio_range=AddrRange(start=0x8C000, end=0x8D000)
+            )
+        )
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=3, mmio_range=AddrRange(start=0xCC000, end=0xCD000)
+            )
+        )
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=4, mmio_range=AddrRange(start=0x10C000, end=0x10D000)
+            )
+        )
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=5, mmio_range=AddrRange(start=0x14C000, end=0x14D000)
+            )
+        )
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=6, mmio_range=AddrRange(start=0x18C000, end=0x18D000)
+            )
+        )
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=7, mmio_range=AddrRange(start=0x1CC000, end=0x1CD000)
+            )
+        )
+    else:
+        pm4_procs.append(
+            PM4PacketProcessor(
+                ip_id=0, mmio_range=AddrRange(start=0xC000, end=0xD000)
+            )
+        )
+
+    system.pc.south_bridge.gpu.pm4_pkt_procs = pm4_procs
 
     # GPU data path
-    gpu_mem_mgr = AMDGPUMemoryManager()
+    gpu_mem_mgr = AMDGPUMemoryManager(cache_line_size=args.cacheline_size)
     system.pc.south_bridge.gpu.memory_manager = gpu_mem_mgr
 
     # CPU data path (SystemHub)
@@ -199,7 +282,8 @@ def makeGpuFSSystem(args):
     for sdma in sdma_engines:
         system._dma_ports.append(sdma)
     system._dma_ports.append(device_ih)
-    system._dma_ports.append(pm4_pkt_proc)
+    for pm4_proc in pm4_procs:
+        system._dma_ports.append(pm4_proc)
     system._dma_ports.append(system_hub)
     system._dma_ports.append(gpu_mem_mgr)
     system._dma_ports.append(hsapp_pt_walker)
@@ -213,7 +297,8 @@ def makeGpuFSSystem(args):
     for sdma in sdma_engines:
         sdma.pio = system.iobus.mem_side_ports
     device_ih.pio = system.iobus.mem_side_ports
-    pm4_pkt_proc.pio = system.iobus.mem_side_ports
+    for pm4_proc in pm4_procs:
+        pm4_proc.pio = system.iobus.mem_side_ports
     system_hub.pio = system.iobus.mem_side_ports
 
     # Full system needs special TLBs for SQC, Scalar, and vector data ports
@@ -247,7 +332,7 @@ def makeGpuFSSystem(args):
         0x00000340,
         0x00000000,
         0x00000340,
-        0x0000000F,
+        0x00000000,
         0x00000340,
         0x00000000,
         0x00000000,
@@ -265,7 +350,7 @@ def makeGpuFSSystem(args):
     # See: https://sandpile.org/x86/cpuid.htm#level_0000_0001h
     # Enables AVX, OSXSAVE, XSAVE, POPCNT, SSE4.2, SSE4.1, CMPXCHG16B,
     # and FMA.
-    avx_cpu_features = [0x00020F51, 0x00000805, 0xEFDBFBFF, 0x1C983209]
+    avx_cpu_features = [0x00020F51, 0x00000805, 0xEFDBFBFF, 0x1C803209]
 
     for i, cpu in enumerate(system.cpu):
         # Break once we reach the shader "CPU"
@@ -296,11 +381,15 @@ def makeGpuFSSystem(args):
                 obj.eventq_index = 0
             cpu.eventq_index = i + 1
 
-    # Disable KVM Perf counters if specified. This is useful for machines
-    # with more restrictive KVM paranoid levels.
-    if args.no_kvm_perf and ObjectList.is_kvm_cpu(TestCPUClass):
-        for i, cpu in enumerate(system.cpu[:-1]):
-            cpu.usePerf = False
+    # Only enable KVM perf counters if explicitly set, as this is more
+    # restrictive.
+    if ObjectList.is_kvm_cpu(TestCPUClass):
+        if args.kvm_perf:
+            for i, cpu in enumerate(system.cpu[:-1]):
+                cpu.usePerf = True
+        else:
+            for i, cpu in enumerate(system.cpu[:-1]):
+                cpu.usePerf = False
 
     gpu_port_idx = (
         len(system.ruby._cpu_ports)
@@ -316,9 +405,9 @@ def makeGpuFSSystem(args):
     token_port_idx = 0
     for i in range(len(system.ruby._cpu_ports)):
         if isinstance(system.ruby._cpu_ports[i], VIPERCoalescer):
-            system.cpu[shader_idx].CUs[
-                token_port_idx
-            ].gmTokenPort = system.ruby._cpu_ports[i].gmTokenPort
+            system.cpu[shader_idx].CUs[token_port_idx].gmTokenPort = (
+                system.ruby._cpu_ports[i].gmTokenPort
+            )
             token_port_idx += 1
 
     wavefront_size = args.wf_size
@@ -326,9 +415,9 @@ def makeGpuFSSystem(args):
         # The pipeline issues wavefront_size number of uncoalesced requests
         # in one GPU issue cycle. Hence wavefront_size mem ports.
         for j in range(wavefront_size):
-            system.cpu[shader_idx].CUs[i].memory_port[
-                j
-            ] = system.ruby._cpu_ports[gpu_port_idx].in_ports[j]
+            system.cpu[shader_idx].CUs[i].memory_port[j] = (
+                system.ruby._cpu_ports[gpu_port_idx].in_ports[j]
+            )
         gpu_port_idx += 1
 
     for i in range(args.num_compute_units):

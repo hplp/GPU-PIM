@@ -41,6 +41,8 @@ from typing import (
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
+from m5.util import warn
+
 from _m5 import core
 
 from ..utils.filelock import FileLock
@@ -48,6 +50,7 @@ from ..utils.progress_bar import (
     progress_hook,
     tqdm,
 )
+from ..utils.socks_ssl_context import get_proxy_context
 from .client import get_resource_json_obj
 from .client import list_resources as client_list_resources
 from .md5_utils import (
@@ -87,30 +90,13 @@ def _download(url: str, download_to: str, max_attempts: int = 6) -> None:
         # number of download attempts has been reached or if a HTTP status code
         # other than 408, 429, or 5xx is received.
         try:
-            # check to see if user requests a proxy connection
-            use_proxy = os.getenv("GEM5_USE_PROXY")
-            if use_proxy:
-                # If the "use_proxy" variable is specified we setup a socks5
-                # connection.
-
-                import socket
-                import ssl
-
-                import socks
-
-                IP_ADDR, host_port = use_proxy.split(":")
-                PORT = int(host_port)
-                socks.set_default_proxy(socks.SOCKS5, IP_ADDR, PORT)
-                socket.socket = socks.socksocket
-
-                # base SSL context for https connection
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-
+            proxy_context = get_proxy_context()
+            if proxy_context:
                 # get the file as a bytes blob
                 request = urllib.request.Request(url)
-                with urllib.request.urlopen(request, context=ctx) as fr:
+                with urllib.request.urlopen(
+                    request, context=proxy_context
+                ) as fr:
                     with tqdm.wrapattr(
                         open(download_to, "wb"),
                         "write",
@@ -277,15 +263,74 @@ def get_resource(
             else:
                 md5 = md5_dir(Path(to_path))
 
-            if md5 == resource_json["md5sum"]:
+            if md5 == resource_json.get("md5sum"):
                 # In this case, the file has already been download, no need to
                 # do so again.
                 return
-            elif download_md5_mismatch:
+            elif download_md5_mismatch or "md5sum" not in resource_json:
+                # In the case the the md5sum is not present in the resource
+                # JSON/dict or the ,md5sum is present but does not match that
+                # of the local file, the local file will be deleted and the
+                # resource will be downloaded again.
                 if os.path.isfile(to_path):
                     os.remove(to_path)
                 else:
                     shutil.rmtree(to_path)
+                if "md5sum" not in resource_json:
+                    warn(
+                        f"The 'md5sum' field of {resource_name}, version "
+                        f"{resource_version} is not present or set. This is "
+                        "not recommended as it forces a re-download of the "
+                        "resource on every call to get_resource."
+                    )
+                # if the md5sum of the local resource != the md5sum in the
+                # retrieved JSON
+                elif md5 != resource_json.get("md5sum"):
+                    most_recent_resource_version = get_resource_json_obj(
+                        resource_name,
+                        resource_version=None,
+                        clients=clients,
+                        gem5_version=gem5_version,
+                    )["resource_version"]
+
+                    # Check if the local version of requested resource is
+                    # different from the requested version
+                    int_most_recent_resource_version = int(
+                        most_recent_resource_version.split(".")[0]
+                    )
+                    version_mismatch = False
+                    # iterate through jsons of the requested resource by
+                    # version, starting from 1.0.0 to the latest version,
+                    # and try to match md5sums to determine local version.
+                    for i in range(1, int_most_recent_resource_version + 1):
+                        temp_resource_version = f"{i}.0.0"
+                        temp_resource_json = get_resource_json_obj(
+                            resource_name,
+                            resource_version=temp_resource_version,
+                            clients=clients,
+                            gem5_version=gem5_version,
+                        )
+                        # If we match the md5sum of the local resource, and the
+                        # resource version to get != the local resource version
+                        if (
+                            temp_resource_json.get("md5sum") == md5
+                            and resource_version != temp_resource_version
+                        ):
+                            warn(
+                                f"Redownloading {resource_name} to get "
+                                f"version {resource_version}. The local "
+                                f"version of the resource is currently "
+                                f"{temp_resource_version}."
+                            )
+                            version_mismatch = True
+                            break
+                    if not version_mismatch:
+                        warn(
+                            "There is a mismatch between the md5sum of the "
+                            f"local and remote copies of {resource_name}, "
+                            f"version {resource_version}. Redownloading..."
+                        )
+
             else:
                 raise Exception(
                     "There already a file present at '{}' but "

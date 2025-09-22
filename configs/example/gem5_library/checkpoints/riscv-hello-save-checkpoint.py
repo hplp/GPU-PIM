@@ -75,14 +75,14 @@ requires(isa_required=ISA.RISCV)
 cache_hierarchy = NoCache()
 
 # We use a single channel DDR3_1600 memory system
-memory = SingleChannelDDR3_1600(size="32MB")
+memory = SingleChannelDDR3_1600(size="32MiB")
 
 # We use a simple Timing processor with one core.
 processor = SimpleProcessor(
     cpu_type=CPUTypes.TIMING, isa=ISA.RISCV, num_cores=1
 )
 
-# The gem5 library simble board which can be used to run simple SE-mode
+# The gem5 library simple board which can be used to run simple SE-mode
 # simulations.
 board = SimpleBoard(
     clk_freq="3GHz",
@@ -107,8 +107,8 @@ board.set_se_binary_workload(
 
 # Lastly we run the simulation.
 max_ticks = 10**6
-simulator = Simulator(board=board, full_system=False)
-simulator.run(max_ticks=max_ticks)
+simulator = Simulator(board=board, full_system=False, max_ticks=max_ticks)
+simulator.run()
 
 print(
     "Exiting @ tick {} because {}.".format(

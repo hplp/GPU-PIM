@@ -49,8 +49,8 @@ from gem5.utils.requires import requires
 # Run a check to ensure the right version of gem5 is being used.
 requires(isa_required=ISA.RISCV)
 
-from gem5.components.cachehierarchies.classic.private_l1_private_l2_cache_hierarchy import (
-    PrivateL1PrivateL2CacheHierarchy,
+from gem5.components.cachehierarchies.classic.private_l1_private_l2_walk_cache_hierarchy import (
+    PrivateL1PrivateL2WalkCacheHierarchy,
 )
 
 parser = argparse.ArgumentParser(description="Runs Linux fs test with RISCV.")
@@ -72,12 +72,12 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-cache_hierarchy = PrivateL1PrivateL2CacheHierarchy(
+cache_hierarchy = PrivateL1PrivateL2WalkCacheHierarchy(
     l1d_size="32KiB", l1i_size="32KiB", l2_size="512KiB"
 )
 
 # Setup the system memory.
-memory = SingleChannelDDR3_1600(size="128MB")
+memory = SingleChannelDDR3_1600(size="128MiB")
 # Setup a single core Processor.
 if args.cpu_type == "atomic":
     processor = SimpleProcessor(
@@ -98,16 +98,19 @@ board = LupvBoard(
 # Set the Full System workload.
 
 board.set_kernel_disk_workload(
-    kernel=obtain_resource("riscv-lupio-linux-kernel"),
-    disk_image=obtain_resource("riscv-lupio-busybox-img"),
+    kernel=obtain_resource(
+        "riscv-lupio-linux-kernel", resource_version="1.0.0"
+    ),
+    disk_image=obtain_resource(
+        "riscv-lupio-busybox-img", resource_version="1.0.0"
+    ),
 )
 
 
 # Begin running of the simulation.
 print("Running with ISA: " + processor.get_isa().name)
 print()
-root = Root(full_system=True, system=board)
-board._pre_instantiate()
+root = board._pre_instantiate()
 m5.instantiate()
 print("Beginning simulation!")
 

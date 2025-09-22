@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, 2023 ARM Limited
+ * Copyright (c) 2013-2014, 2022-2025 Arm Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -65,7 +65,7 @@ Base::PrefetchInfo::PrefetchInfo(PacketPtr pkt, Addr addr, bool miss)
     paddress(pkt->req->getPaddr()), cacheMiss(miss)
 {
     unsigned int req_size = pkt->req->getSize();
-    if (!write && miss) {
+    if ((!write && miss) || !pkt->hasData()) {
         data = nullptr;
     } else {
         data = new uint8_t[req_size];
@@ -238,6 +238,7 @@ Base::probeNotify(const CacheAccessProbeArg &acc, bool miss)
     // operations or for writes that we are coaslescing.
     if (pkt->cmd.isSWPrefetch()) return;
     if (pkt->req->isCacheMaintenance()) return;
+    if (pkt->isCleanEviction()) return;
     if (pkt->isWrite() && cache.coalesce()) return;
     if (!pkt->req->hasPaddr()) {
         panic("Request must have a physical address");
@@ -276,22 +277,22 @@ Base::regProbeListeners()
      * cache is configured to prefetch on accesses.
      */
     if (listeners.empty() && probeManager != nullptr) {
-        listeners.push_back(new PrefetchListener(*this, probeManager,
-                                                "Miss", false, true));
-        listeners.push_back(new PrefetchListener(*this, probeManager,
-                                                 "Fill", true, false));
-        listeners.push_back(new PrefetchListener(*this, probeManager,
-                                                 "Hit", false, false));
-        listeners.push_back(new PrefetchEvictListener(*this, probeManager,
-                                                 "Data Update"));
+        listeners.push_back(probeManager->connect<PrefetchListener>(
+            *this, "Miss", false, true));
+        listeners.push_back(probeManager->connect<PrefetchListener>(
+            *this, "Fill", true, false));
+        listeners.push_back(probeManager->connect<PrefetchListener>(
+            *this, "Hit", false, false));
+        listeners.push_back(probeManager->connect<PrefetchEvictListener>(
+            *this, "Data Update"));
     }
 }
 
 void
 Base::addEventProbe(SimObject *obj, const char *name)
 {
-    ProbeManager *pm(obj->getProbeManager());
-    listeners.push_back(new PrefetchListener(*this, pm, name));
+    ProbeManager *pm = obj->getProbeManager();
+    listeners.push_back(pm->connect<PrefetchListener>(*this, name));
 }
 
 void

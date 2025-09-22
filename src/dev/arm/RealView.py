@@ -1,4 +1,4 @@
-# Copyright (c) 2009-2022 Arm Limited
+# Copyright (c) 2009-2022, 2024 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -1189,8 +1189,8 @@ class VExpress_GEM5_Base(RealView):
     Memory map:
        0x00000000-0x03ffffff: Boot memory (CS0)
        0x04000000-0x07ffffff: Trusted Memory/Reserved
-            0x04000000-0x0403FFFF: 256kB Trusted SRAM
-            0x06000000-0x07ffffff: 32MB Trusted DRAM
+            0x04000000-0x0403FFFF: 256KiB Trusted SRAM
+            0x06000000-0x07ffffff: 32MiB Trusted DRAM
        0x08000000-0x0bffffff: NOR FLASH0 (CS0 alias)
        0x0c000000-0x0fffffff: NOR FLASH1 (Off-chip, CS4)
        0x10000000-0x13ffffff: gem5-specific peripherals (Off-chip, CS5)
@@ -1283,6 +1283,7 @@ class VExpress_GEM5_Base(RealView):
              95    : HDLCD
              96- 98: GPU (reserved)
             100-103: PCI
+            106    : SMMU event queue
             130    : System Watchdog (SP805)
        256-319: MSI frame 0 (gem5-specific, SPIs)
        320-511: Unused
@@ -1315,7 +1316,7 @@ class VExpress_GEM5_Base(RealView):
     # Trusted DRAM
     # TODO: preventing access from unsecure world to the trusted RAM
     trusted_dram = SimpleMemory(
-        range=AddrRange(0x06000000, size="32MB"), conf_table_reported=False
+        range=AddrRange(0x06000000, size="32MiB"), conf_table_reported=False
     )
     # Non-Trusted SRAM
     non_trusted_sram = MmioSRAM(
@@ -1453,7 +1454,7 @@ class VExpress_GEM5_Base(RealView):
 
     # VRAM
     vram = SimpleMemory(
-        range=AddrRange(0x18000000, size="32MB"), conf_table_reported=False
+        range=AddrRange(0x18000000, size="32MiB"), conf_table_reported=False
     )
 
     def _off_chip_devices(self):
@@ -1508,7 +1509,10 @@ class VExpress_GEM5_Base(RealView):
         if hasattr(self, "smmu"):
             m5.fatal("A SMMU has already been instantiated\n")
 
-        self.smmu = SMMUv3(reg_map=AddrRange(0x2B400000, size=0x00020000))
+        self.smmu = SMMUv3(
+            reg_map=AddrRange(0x2B400000, size=0x00020000),
+            eventq_irq=ArmSPI(num=106),
+        )
 
         self.smmu.request = bus.cpu_side_ports
         self.smmu.control = bus.mem_side_ports

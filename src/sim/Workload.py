@@ -76,6 +76,7 @@ class StubWorkload(Workload):
 
 class KernelPanicOopsBehaviour(ScopedEnum):
     "Define what gem5 should do after a Kernel Panic or Oops."
+
     vals = [
         "Continue",
         "DumpDmesgAndContinue",
@@ -147,6 +148,12 @@ class SEWorkload(Workload, metaclass=SEWorkloadMeta):
         from _m5 import object_file
 
         obj = object_file.create(path)
+
+        if obj is None:
+            raise ValueError(
+                f"{path}: the file is not an object file compatible with gem5."
+            )
+
         options = list(
             filter(
                 lambda wld: wld._is_compatible_with(obj),

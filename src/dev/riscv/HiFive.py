@@ -183,7 +183,7 @@ class HiFive(HiFiveBase):
     # PCI
     pci_host = GenericRiscvPciHost(
         conf_base=0x30000000,
-        conf_size="256MB",
+        conf_size="256MiB",
         conf_device_bits=12,
         pci_pio_base=0x2F000000,
         pci_mem_base=0x40000000,
@@ -221,10 +221,10 @@ class HiFive(HiFiveBase):
         self.plic.n_src = max(plic_srcs) + 1
 
     def setNumCores(self, num_cpu):
-        """Sets the PLIC and CLINT to have the right number of threads and
-        contexts. Assumes that the cores have a single hardware thread.
+        """Sets the CLINT to number of threads and the PLIC hartID/pmode for
+        each contexts. Assumes that the cores have a single hardware thread.
         """
-        self.plic.n_contexts = num_cpu * 2
+        self.plic.hart_config = ",".join(["MS" for _ in range(num_cpu)])
         self.clint.num_threads = num_cpu
 
     def generateDeviceTree(self, state):

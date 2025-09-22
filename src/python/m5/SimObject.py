@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2020 ARM Limited
+# Copyright (c) 2017-2020, 2025 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -61,6 +61,7 @@ from m5.ext.pyfdt import pyfdt
 # variable, the 'name' param)...
 from m5.params import *
 from m5.params import (
+    DictParamDesc,
     ParamDesc,
     Port,
     SimObjectVector,
@@ -92,7 +93,7 @@ from m5.util.pybind import *
 # object, either using keyword assignment in the constructor or in
 # separate assignment statements.  For example:
 #
-# cache = BaseCache(size='64KB')
+# cache = BaseCache(size='64KiB')
 # cache.hit_latency = 3
 # cache.assoc = 8
 #
@@ -145,6 +146,7 @@ class MetaSimObject(type):
         "cxx_exports": list,
         "cxx_param_exports": list,
         "cxx_template_params": list,
+        "override_create": bool,  # True if overrides the default create()
     }
     # Attributes that can be set any time
     keywords = {"check": FunctionType}
@@ -186,6 +188,8 @@ class MetaSimObject(type):
             value_dict["cxx_param_exports"] = []
         if "cxx_template_params" not in value_dict:
             value_dict["cxx_template_params"] = []
+        if "override_create" not in value_dict:
+            value_dict["override_create"] = False
         cls_dict["_value_dict"] = value_dict
         cls = super().__new__(mcls, name, bases, cls_dict)
         if "type" in value_dict:
@@ -452,10 +456,10 @@ class MetaSimObject(type):
 
     # See ParamValue.cxx_predecls for description.
     def cxx_predecls(cls, code):
-        code('#include "params/$cls.hh"')
+        code('#include "params/$cls.hh"', add_once=True)
 
     def pybind_predecls(cls, code):
-        code('#include "${{cls.cxx_header}}"')
+        code('#include "${{cls.cxx_header}}"', add_once=True)
 
 
 # This *temporary* definition is required to support calls from the
@@ -489,6 +493,12 @@ def cxxMethod(*args, **kwargs):
                 # We don't cound 'self' as an argument in this case.
                 continue
             param = sig.parameters[param_name]
+            if param.kind in [
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            ]:
+                # *args and **kwargs shouldn't be in generated parameters
+                continue
             if param.default is param.empty:
                 args.append(param_name)
             else:
@@ -673,6 +683,9 @@ class SimObject(metaclass=MetaSimObject):
                     ptype = None
                     if isinstance(values, VectorParamDesc):
                         type_str = f"Vector_{values.ptype_str}"
+                        ptype = values
+                    elif isinstance(values, DictParamDesc):
+                        type_str = f"Dict_{values.key_desc.ptype_str}_{values.val_desc.ptype_str}"
                         ptype = values
                     else:
                         type_str = f"{values.ptype_str}"
@@ -1043,6 +1056,10 @@ class SimObject(metaclass=MetaSimObject):
                 found_obj = child
         # search param space
         for pname, pdesc in self._params.items():
+            if isinstance(pdesc, DictParamDesc):
+                # DictParams are not supported
+                continue
+
             if issubclass(pdesc.ptype, ptype):
                 match_obj = self._values[pname]
                 if found_obj != None and found_obj != match_obj:
@@ -1076,6 +1093,10 @@ class SimObject(metaclass=MetaSimObject):
                     all.update(dict(zip(child_all, [done] * len(child_all))))
         # search param space
         for pname, pdesc in self._params.items():
+            if isinstance(pdesc, DictParamDesc):
+                # DictParams are not supported
+                continue
+
             if issubclass(pdesc.ptype, ptype):
                 match_obj = self._values[pname]
                 if not isproxy(match_obj) and not isNullPointer(match_obj):
@@ -1199,6 +1220,21 @@ class SimObject(metaclass=MetaSimObject):
                     param,
                 )
 
+            if (not isinstance(value, EthernetAddr)) and isproxy(value):
+                # At the time of adding this error unproxying params happens
+                # in simulate.py at lines 103-104 (commit hash: f56459470a)
+                # To understand how attributes are handled for SimObjects
+                # refer to SimObject::__setattr__.
+                fatal(
+                    f"Param {param} for {self._name} has value = {value}. "
+                    "This value is a not a valid value. This could be caused "
+                    f"by {param} not having been unproxied correctly. "
+                    "One reason why this might happen is if you have "
+                    "mistakenly added a child SimObject as an attr and not a "
+                    "child by giving it a name that starts with an underscore "
+                    f"`_`. {self.path()} should not say 'orphan.'"
+                )
+
             value = value.getValue()
             if isinstance(self._params[param], VectorParamDesc):
                 assert isinstance(value, list)
@@ -1212,6 +1248,18 @@ class SimObject(metaclass=MetaSimObject):
                 else:
                     for v in value:
                         getattr(cc_params, param).append(v)
+            elif isinstance(self._params[param], DictParamDesc):
+                assert isinstance(value, dict)
+                dic = getattr(cc_params, param)
+                assert not len(
+                    dic
+                ), "Dictionary parameter has already been set"
+                if isinstance(dic, dict):
+                    setattr(cc_params, param, dict(value))
+                else:
+                    raise TypeError(
+                        f"Must provide dictionary for param {param}"
+                    )
             else:
                 setattr(cc_params, param, value)
 
@@ -1238,7 +1286,9 @@ class SimObject(metaclass=MetaSimObject):
         if not self._ccObject:
             # Make sure this object is in the configuration hierarchy
             if not self._parent and not isRoot(self):
-                raise RuntimeError("Attempt to instantiate orphan node")
+                raise RuntimeError(
+                    f"Attempt to instantiate orphan node {self}"
+                )
             # Cycles in the configuration hierarchy are not supported. This
             # will catch the resulting recursion and stop.
             self._ccObject = -1

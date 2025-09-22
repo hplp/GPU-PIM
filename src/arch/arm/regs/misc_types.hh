@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2023 Arm Limited
+ * Copyright (c) 2010-2024 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -133,6 +133,7 @@ namespace ArmISA
     EndBitUnion(AA64ISAR0)
 
     BitUnion64(AA64ISAR1)
+        Bitfield<59, 56> xs;
         Bitfield<55, 52> i8mm;
         Bitfield<43, 40> specres;
         Bitfield<39, 36> sb;
@@ -225,6 +226,11 @@ namespace ArmISA
         Bitfield<7, 4> el1;
         Bitfield<3, 0> el0;
     EndBitUnion(AA64PFR0)
+
+    BitUnion64(AA64PFR1)
+        Bitfield<27, 24> sme;
+        Bitfield<19, 16> mpamFrac;
+    EndBitUnion(AA64PFR1)
 
     BitUnion64(AA64ZFR0)
         Bitfield<59, 56> f64mm;
@@ -382,6 +388,7 @@ namespace ArmISA
     EndBitUnion(NSACR)
 
     BitUnion64(SCR)
+        Bitfield<45> piEn;
         Bitfield<44> sctlr2En;
         Bitfield<43> tcr2En;
         Bitfield<40> trndr;
@@ -617,6 +624,7 @@ namespace ArmISA
         Bitfield<29> tbid; // EL2
         Bitfield<31, 30> tg1; // EL1
         Bitfield<34, 32> ips; // EL1
+        Bitfield<35> pie; // EL3
         Bitfield<36> as; // EL1
         Bitfield<37> tbi0; // EL1
         Bitfield<38> tbi1; // EL1
@@ -627,6 +635,10 @@ namespace ArmISA
         Bitfield<51> tbid0; // EL1
         Bitfield<52> tbid1; // EL1
     EndBitUnion(TCR)
+
+    BitUnion64(TCR2)
+        Bitfield<1> pie;    // EL1/EL2
+    EndBitUnion(TCR2)
 
     BitUnion32(HTCR)
         Bitfield<2, 0> t0sz;
@@ -649,6 +661,10 @@ namespace ArmISA
         Bitfield<19> vs;     // Only defined for VTCR_EL2
         Bitfield<21> ha;     // Only defined for VTCR_EL2
         Bitfield<22> hd;     // Only defined for VTCR_EL2
+        Bitfield<29> nsw;    // Only defined for VTCR_EL2
+        Bitfield<29> sw;     // Only defined for VSTCR_EL2
+        Bitfield<30> nsa;    // Only defined for VTCR_EL2
+        Bitfield<30> sa;     // Only defined for VSTCR_EL2
     EndBitUnion(VTCR_t)
 
     BitUnion32(PRRR)
@@ -745,7 +761,14 @@ namespace ArmISA
         Bitfield<0>      f;
    EndBitUnion(PAR)
 
-   BitUnion32(ESR)
+   BitUnion64(ESR)
+        Bitfield<55, 32> iss2;
+
+        // Data Abort ISS2
+        SubBitUnion(data_abort_iss2, 55, 32)
+            Bitfield<5> dirtyBit;
+        EndSubBitUnion(data_abort_iss2)
+
         Bitfield<31, 26> ec;
         Bitfield<25> il;
         Bitfield<24, 0> iss;
@@ -1011,6 +1034,8 @@ namespace ArmISA
     // HFGRTR and HFGWTR. Some fields are
     // for HFGRTR only (RO registers)
     BitUnion64(HFGTR)
+        Bitfield<58> nPirEL1;
+        Bitfield<57> nPire0EL1;
         Bitfield<50> nAccdataEL1;
         Bitfield<49> erxaddrEL1;
         Bitfield<48> erxpfgcdnEL1;
@@ -1064,10 +1089,75 @@ namespace ArmISA
         Bitfield<0> afsr0EL1;
     EndBitUnion(HFGTR)
 
+    // HDFGRTR and HDFGWTR
+    BitUnion64(HDFGTR)
+        Bitfield<11> osdlrEL1;
+        Bitfield<10> oseccrEL1;
+        Bitfield<9> oslsrEL1;
+        Bitfield<8> oslarEL1;
+        Bitfield<7> dbgprcrEL1;
+        Bitfield<6> dbgauthstatusEL1;
+        Bitfield<5> dbgclaim;
+        Bitfield<4> mdscrEL1;
+        Bitfield<3> dbgwvrnEL1;
+        Bitfield<2> dbgwcrnEL1;
+        Bitfield<1> dbgbvrnEL1;
+        Bitfield<0> dbgbcrnEL1;
+    EndBitUnion(HDFGTR)
+
     BitUnion64(HCRX)
         Bitfield<15> sctlr2En;
         Bitfield<14> tcr2En;
+        Bitfield<4> fgtnxs;
+        Bitfield<3> fnxs;
     EndBitUnion(HCRX)
+
+    BitUnion64(MPAMIDR)
+        Bitfield<61> hasSdeflt;
+        Bitfield<60> hasForceNs;
+        Bitfield<58> hasTidr;
+        Bitfield<39,32> pmgMax;
+        Bitfield<20,18> vpmrMax;
+        Bitfield<17> hasHcr;
+        Bitfield<15,0> partidMax;
+    EndBitUnion(MPAMIDR)
+
+    // Generic view of MPAMx_ELy
+    BitUnion64(MPAM)
+        Bitfield<63> mpamEn;
+
+        // MPAM1_EL1 only
+        SubBitUnion(el1, 62, 48)
+            Bitfield<60> forcedNs;
+        EndSubBitUnion(el1)
+
+        // MPAM2_EL2 only
+        SubBitUnion(el2, 62, 48)
+            Bitfield<58> tidr;
+            Bitfield<50> enMpamSm;
+            Bitfield<49> trapMpam0EL1;
+            Bitfield<48> trapMpam1EL1;
+        EndSubBitUnion(el2)
+
+        // MPAM3_EL3 only
+        SubBitUnion(el3, 62, 48)
+            Bitfield<62> trapLower;
+            Bitfield<61> sdeflt;
+            Bitfield<60> forceNs;
+        EndSubBitUnion(el3)
+
+        Bitfield<47,40> pmgD;
+        Bitfield<39,32> pmgI;
+        Bitfield<31,16> partidD;
+        Bitfield<15,0>  partidI;
+    EndBitUnion(MPAM)
+
+    BitUnion64(MPAMHCR)
+        Bitfield<31> trapMpamIdrEL1;
+        Bitfield<8> gstappPlk;
+        Bitfield<1> el1Vpmen;
+        Bitfield<0> el0Vpmen;
+    EndBitUnion(MPAMHCR)
 
 } // namespace ArmISA
 } // namespace gem5

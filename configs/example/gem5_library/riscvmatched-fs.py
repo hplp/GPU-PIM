@@ -64,7 +64,7 @@ args = parser.parse_args()
 # instantiate the riscv matched board with default parameters
 board = RISCVMatchedBoard(
     clk_freq="1.2GHz",
-    l2_size="2MB",
+    l2_size="2MiB",
     is_fs=True,
 )
 
@@ -76,7 +76,7 @@ board = RISCVMatchedBoard(
 # In the case where the `-i` flag is passed, we add the kernel argument
 # `init=/root/exit.sh`. This means the simulation will exit after the Linux
 # Kernel has booted.
-workload = obtain_resource("riscv-ubuntu-20.04-boot")
+workload = obtain_resource("riscv-ubuntu-20.04-boot", resource_version="3.0.0")
 kernel_args = board.get_default_kernel_args()
 if args.to_init:
     kernel_args.append("init=/root/exit.sh")

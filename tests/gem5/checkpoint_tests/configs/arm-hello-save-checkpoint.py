@@ -52,10 +52,10 @@ args = parser.parse_args()
 requires(isa_required=ISA.ARM)
 
 cache_hierarchy = PrivateL1PrivateL2CacheHierarchy(
-    l1d_size="16kB", l1i_size="16kB", l2_size="256kB"
+    l1d_size="16KiB", l1i_size="16KiB", l2_size="256KiB"
 )
 
-memory = SingleChannelDDR3_1600(size="32MB")
+memory = SingleChannelDDR3_1600(size="32MiB")
 processor = SimpleProcessor(cpu_type=CPUTypes.ATOMIC, isa=ISA.ARM, num_cores=2)
 board = SimpleBoard(
     clk_freq="3GHz",
@@ -63,11 +63,16 @@ board = SimpleBoard(
     memory=memory,
     cache_hierarchy=cache_hierarchy,
 )
-board.set_se_binary_workload(obtain_resource("arm-hello64-static"))
+board.set_se_binary_workload(
+    obtain_resource(
+        "arm-hello64-static",
+        resource_version="1.0.0",
+    )
+)
 
-sim = Simulator(board=board, full_system=False)
-max_ticks = 10**6
-sim.run(max_ticks=max_ticks)
+sim = Simulator(board=board, full_system=False, max_ticks=10**6)
+
+sim.run()
 print(
     "Exiting @ tick {} because {}.".format(
         sim.get_current_tick(), sim.get_last_exit_event_cause()

@@ -59,7 +59,7 @@ nvm_generators = {"NVM": lambda x: x.createNvm}
 
 # Use a single-channel DDR3-1600 x64 (8x8 topology) by default
 parser.add_argument(
-    "--nvm-type",
+    "--mem-type",
     default="NVM_2400_1x64",
     choices=ObjectList.mem_list.get_names(),
     help="type of memory to use",
@@ -104,8 +104,8 @@ system.clk_domain = SrcClockDomain(
     clock="2.0GHz", voltage_domain=VoltageDomain(voltage="1V")
 )
 
-# we are fine with 256 MB memory for now
-mem_range = AddrRange("512MB")
+# we are fine with 256 MiB memory for now
+mem_range = AddrRange("512MiB")
 system.mem_ranges = [mem_range]
 
 # do not worry about reserving space for the backing store
@@ -212,7 +212,7 @@ def trace():
                 nbr_banks,
                 bank,
                 addr_map,
-                args.dram_ranks,
+                args.nvm_ranks,
             )
     yield system.tgen.createExit(0)
 

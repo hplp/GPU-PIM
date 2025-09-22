@@ -206,7 +206,8 @@ GPUDispatcher::exec()
             } else if (!launched) {
                 launched = true;
                 disp_count++;
-                DPRINTF(GPUKernelInfo, "Launched kernel %d\n", exec_id);
+                DPRINTF(GPUKernelInfo, "Launched kernel %d for WG %d\n",
+                            exec_id, disp_count);
             }
         }
 
@@ -324,7 +325,7 @@ GPUDispatcher::notifyWgCompl(Wavefront *wf)
         DPRINTF(GPUKernelInfo, "Completed kernel %d\n", kern_id);
 
         if (kernelExitEvents) {
-            shader->requestKernelExitEvent();
+            shader->requestKernelExitEvent(task->completionSignal());
         }
     }
 

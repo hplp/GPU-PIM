@@ -268,10 +268,47 @@ namespace ArmISA
         RND_NEAREST
     };
 
+    /** Security State */
+    enum class SecurityState
+    {
+        NonSecure,
+        Secure
+    };
+
+    /** Physical Address Space */
+    enum class PASpace
+    {
+        NonSecure,
+        Secure
+    };
+
+    enum class TranMethod
+    {
+        LpaeTran,
+        VmsaTran,
+        UnknownTran
+    };
+
+    enum class DomainType : std::uint8_t
+    {
+        NoAccess = 0,
+        Client,
+        Reserved,
+        Manager
+    };
+
     enum ExceptionLevel
     {
         EL0 = 0,
         EL1,
+        EL2,
+        EL3
+    };
+
+    enum class TranslationRegime
+    {
+        EL10,
+        EL20,
         EL2,
         EL3
     };
@@ -460,6 +497,39 @@ namespace ArmISA
           default:
             return true;
         }
+    }
+
+    static inline const char*
+    regimeToStr(TranslationRegime regime)
+    {
+        switch (regime) {
+          case TranslationRegime::EL10:
+            return "EL10";
+          case TranslationRegime::EL20:
+            return "EL20";
+          case TranslationRegime::EL2:
+            return "EL2";
+          case TranslationRegime::EL3:
+            return "EL3";
+          default:
+            GEM5_UNREACHABLE;
+        }
+    }
+
+    static inline std::ostream&
+    operator<<(std::ostream& os, SecurityState ss)
+    {
+        switch (ss) {
+          case SecurityState::NonSecure:
+            os << "NonSecure";
+            break;
+          case SecurityState::Secure:
+            os << "Secure";
+            break;
+          default:
+            panic("Invalid SecurityState\n");
+        }
+        return os;
     }
 
     constexpr unsigned MaxSveVecLenInBits = 2048;

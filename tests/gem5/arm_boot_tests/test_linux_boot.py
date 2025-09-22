@@ -41,7 +41,9 @@ def test_boot(
     mem_system: str,
     memory_class: str,
     length: str,
+    systemd: bool,
     to_tick: Optional[int] = None,
+    systemd: bool = False,
 ):
     name = f"{cpu}-cpu_{num_cpus}-cores_{mem_system}_{memory_class}_\
 arm_boot_test"
@@ -59,7 +61,12 @@ arm_boot_test"
         memory_class,
         "--resource-directory",
         resource_path,
+        "--systemd" if systemd else "--no-systemd",
     ]
+
+    if systemd:
+        name += "_systemd"
+        config_args += ["--systemd"]
 
     if to_tick:
         name += "_to-tick"
@@ -70,15 +77,6 @@ arm_boot_test"
         config_args += ["--tick-exit", str(to_tick)]
     else:
         name += "_m5-exit"
-
-    if mem_system == "chi":
-        protocol_to_use = "CHI"
-    elif mem_system == "mesi_two_level":
-        protocol_to_use = None
-    elif mem_system == "mi_example":
-        protocol_to_use = "MI_example"
-    else:
-        protocol_to_use = None
 
     gem5_verify_config(
         name=name,
@@ -96,7 +94,6 @@ arm_boot_test"
         valid_isas=(constants.all_compiled_tag,),
         valid_hosts=constants.supported_hosts,
         length=length,
-        protocol=protocol_to_use,
     )
 
 
@@ -109,6 +106,7 @@ test_boot(
     memory_class="SingleChannelDDR3_1600",
     length=constants.quick_tag,
     to_tick=10000000000,
+    systemd=False,
 )
 
 test_boot(
@@ -118,6 +116,7 @@ test_boot(
     memory_class="SingleChannelDDR3_2133",
     length=constants.quick_tag,
     to_tick=10000000000,
+    systemd=False,
 )
 
 test_boot(
@@ -127,6 +126,7 @@ test_boot(
     memory_class="DualChannelDDR3_1600",
     length=constants.quick_tag,
     to_tick=10000000000,
+    systemd=False,
 )
 
 test_boot(
@@ -136,6 +136,7 @@ test_boot(
     memory_class="DualChannelDDR4_2400",
     length=constants.quick_tag,
     to_tick=10000000000,
+    systemd=False,
 )
 
 test_boot(
@@ -145,6 +146,7 @@ test_boot(
     memory_class="DualChannelDDR4_2400",
     length=constants.quick_tag,
     to_tick=10000000000,
+    systemd=False,
 )
 
 
@@ -155,6 +157,7 @@ test_boot(
     memory_class="DualChannelDDR4_2400",
     length=constants.quick_tag,
     to_tick=10000000000,
+    systemd=False,
 )
 
 
@@ -162,10 +165,11 @@ test_boot(
 
 test_boot(
     cpu="atomic",
-    num_cpus=4,
+    num_cpus=1,
     mem_system="no_cache",
     memory_class="HBM2Stack",
     length=constants.long_tag,
+    systemd=True,
 )
 
 test_boot(
@@ -174,4 +178,5 @@ test_boot(
     mem_system="chi",
     memory_class="DualChannelDDR4_2400",
     length=constants.long_tag,
+    systemd=False,
 )

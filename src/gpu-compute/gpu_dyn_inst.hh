@@ -286,6 +286,7 @@ class GPUDynInst : public GPUExecContext
     bool isGloballyCoherent() const;
     bool isSystemCoherent() const;
 
+    bool isI8() const;
     bool isF16() const;
     bool isF32() const;
     bool isF64() const;
@@ -293,6 +294,7 @@ class GPUDynInst : public GPUExecContext
     bool isFMA() const;
     bool isMAC() const;
     bool isMAD() const;
+    bool isMFMA() const;
 
     // for FLAT memory ops. check the segment address
     // against the APE registers to see if it falls
@@ -382,9 +384,10 @@ class GPUDynInst : public GPUExecContext
     void
     setStatusVector(int lane, int newVal)
     {
-        // currently we can have up to 2 memory requests per lane (if the
-        // lane's request goes across multiple cache lines)
-        assert((newVal >= 0) && (newVal <= 2));
+        // Currently we can have up to 4 memory requests per lane. This can
+        // occur on a memory request loading 4x dwords where the memory is
+        // swizzled.
+        assert((newVal >= 0) && (newVal <= 4));
         statusVector[lane] = newVal;
     }
 

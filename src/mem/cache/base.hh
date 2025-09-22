@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015-2016, 2018-2019, 2023 ARM Limited
+ * Copyright (c) 2012-2013, 2015-2016, 2018-2019, 2023-2024 Arm Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -83,6 +83,10 @@ namespace gem5
 namespace prefetch
 {
     class Base;
+}
+namespace partitioning_policy
+{
+    class PartitionManager;
 }
 class MSHR;
 class RequestPort;
@@ -350,6 +354,9 @@ class BaseCache : public ClockedObject
 
     /** Compression method being used. */
     compression::Base* compressor;
+
+    /** Partitioning manager */
+    partitioning_policy::PartitionManager* partitionManager;
 
     /** Prefetcher */
     prefetch::Base *prefetcher;
@@ -1276,17 +1283,17 @@ class BaseCache : public ClockedObject
     }
 
     bool inCache(Addr addr, bool is_secure) const {
-        return tags->findBlock(addr, is_secure);
+        return tags->findBlock({addr, is_secure});
     }
 
     bool hasBeenPrefetched(Addr addr, bool is_secure) const {
-        CacheBlk *block = tags->findBlock(addr, is_secure);
+        CacheBlk *block = tags->findBlock({addr, is_secure});
         return block && block->wasPrefetched();
     }
 
     bool hasBeenPrefetched(Addr addr, bool is_secure,
                            RequestorID requestor) const {
-        CacheBlk *block = tags->findBlock(addr, is_secure);
+        CacheBlk *block = tags->findBlock({addr, is_secure});
         return block && block->wasPrefetched() &&
                (block->getSrcRequestorId() == requestor);
     }

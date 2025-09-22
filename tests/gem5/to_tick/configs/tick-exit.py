@@ -24,9 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""
-
-"""
+""" """
 
 import argparse
 
@@ -77,7 +75,9 @@ motherboard = SimpleBoard(
 
 # Set the workload
 binary = obtain_resource(
-    "x86-hello64-static", resource_directory=args.resource_directory
+    "x86-hello64-static",
+    resource_directory=args.resource_directory,
+    resource_version="1.0.0",
 )
 motherboard.set_se_binary_workload(binary)
 

@@ -79,17 +79,34 @@ class GPUCommandProcessor : public DmaVirtDevice
 
     HSAPacketProcessor& hsaPacketProc();
     RequestorID vramRequestorId();
+    GfxVersion getGfxVersion() const;
 
     void setGPUDevice(AMDGPUDevice *gpu_device);
     void setShader(Shader *shader);
     Shader* shader();
     GPUComputeDriver* driver();
 
+    struct KernelDispatchData
+    {
+        AMDKernelCode *akc = nullptr;
+        void *raw_pkt = nullptr;
+        uint32_t queue_id = 0;
+        Addr host_pkt_addr = 0;
+        PacketPtr readPkt = nullptr;
+        HSAQueueEntry *task = nullptr;
+    };
+
+    std::list<struct KernelDispatchData> kernelDispatchList;
+
     enum AgentCmd
     {
       Nop = 0,
       Steal = 1
     };
+
+    void performTimingRead(PacketPtr pkt, int dispType);
+
+    void completeTimingRead(int dispType);
 
     void submitAgentDispatchPkt(void *raw_pkt, uint32_t queue_id,
                            Addr host_pkt_addr);
@@ -148,11 +165,18 @@ class GPUCommandProcessor : public DmaVirtDevice
     // Typedefing dmaRead and dmaWrite function pointer
     typedef void (DmaDevice::*DmaFnPtr)(Addr, int, Event*, uint8_t*, Tick);
     void initABI(HSAQueueEntry *task);
+    void sanityCheckAKC(AMDKernelCode *akc);
     HSAPacketProcessor *hsaPP;
     TranslationGenPtr translate(Addr vaddr, Addr size) override;
 
     // Running counter of dispatched tasks
     int dynamic_task_id = 0;
+
+    // Running counter of dispatched user (non-blit) kernels
+    int non_blit_kernel_id = 0;
+
+    // Skip all user (non-blit) kernels until reaching this kernel
+    int target_non_blit_kernel_id = 0;
 
     // Keep track of start times for task dispatches.
     std::unordered_map<Addr, Tick> dispatchStartTime;
@@ -297,6 +321,9 @@ class GPUCommandProcessor : public DmaVirtDevice
             dmaReadVirt(value_addr, sizeof(Addr), cb, &cb->dmaBuffer, 1e9);
         }
     }
+
+    void readPreload(AMDKernelCode *akc, HSAQueueEntry *task);
+    void initPreload(AMDKernelCode *akc, HSAQueueEntry *task);
 };
 
 } // namespace gem5

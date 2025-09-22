@@ -37,7 +37,9 @@ from typing import (
 from m5.objects import (
     AddrRange,
     MemCtrl,
+    MemInterface,
     Port,
+    Root,
     SubSystem,
 )
 
@@ -49,6 +51,18 @@ class AbstractMemorySystem(SubSystem):
 
     def __init__(self) -> None:
         super().__init__()
+
+    def _pre_instantiate(self, root: Root) -> None:
+        """Called in the `AbstractBoard`'s `_pre_instantiate` method. This is
+        called after `connect_things`, after the creation of the root object
+        (which is passed in as an argument), but before `m5.instantiate`).
+
+        Subclasses should override this method to set up any connections.
+
+        At present there is no general task that must be specified here and is
+        default or applicable to all memory systems.
+        """
+        pass
 
     @abstractmethod
     def incorporate_memory(self, board: AbstractBoard) -> None:
@@ -67,6 +81,12 @@ class AbstractMemorySystem(SubSystem):
         raise NotImplementedError
 
     @abstractmethod
+    def get_mem_interfaces(self) -> List[MemInterface]:
+        """Get all memory interfaces in this memory system.
+        Useful when creating physical memory objects."""
+        raise NotImplementedError
+
+    @abstractmethod
     def get_size(self) -> int:
         """Returns the total size of the memory system."""
         raise NotImplementedError
@@ -80,6 +100,14 @@ class AbstractMemorySystem(SubSystem):
 
         If this memory system is incompatible with the ranges, an exception
         will be raised.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_uninterleaved_range(self) -> List[AddrRange]:
+        """Returns the range of the memory system without interleaving.
+        This is useful when other components in the system want to interleave
+        the memory range different to how the memory has interleaved them.
         """
         raise NotImplementedError
 

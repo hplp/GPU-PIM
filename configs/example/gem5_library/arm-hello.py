@@ -59,12 +59,12 @@ requires(isa_required=ISA.ARM)
 cache_hierarchy = NoCache()
 
 # We use a single channel DDR3_1600 memory system
-memory = SingleChannelDDR3_1600(size="32MB")
+memory = SingleChannelDDR3_1600(size="32MiB")
 
 # We use a simple Timing processor with one core.
 processor = SimpleProcessor(cpu_type=CPUTypes.TIMING, isa=ISA.ARM, num_cores=1)
 
-# The gem5 library simble board which can be used to run simple SE-mode
+# The gem5 library simple board which can be used to run simple SE-mode
 # simulations.
 board = SimpleBoard(
     clk_freq="3GHz",
@@ -84,7 +84,7 @@ board.set_se_binary_workload(
     # Any resource specified in this file will be automatically retrieved.
     # At the time of writing, this file is a WIP and does not contain all
     # resources. Jira ticket: https://gem5.atlassian.net/browse/GEM5-1096
-    obtain_resource("arm-hello64-static")
+    obtain_resource("arm-hello64-static", resource_version="1.0.0")
 )
 
 # Lastly we run the simulation.

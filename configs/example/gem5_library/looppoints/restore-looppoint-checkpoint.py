@@ -48,8 +48,8 @@ from m5.stats import (
 )
 
 from gem5.components.boards.simple_board import SimpleBoard
-from gem5.components.cachehierarchies.classic.private_l1_private_l2_cache_hierarchy import (
-    PrivateL1PrivateL2CacheHierarchy,
+from gem5.components.cachehierarchies.classic.private_l1_private_l2_walk_cache_hierarchy import (
+    PrivateL1PrivateL2WalkCacheHierarchy,
 )
 from gem5.components.memory import DualChannelDDR4_2400
 from gem5.components.processors.cpu_types import CPUTypes
@@ -90,15 +90,15 @@ args = parser.parse_args()
 
 # The cache hierarchy can be different from the cache hierarchy used in taking
 # the checkpoints
-cache_hierarchy = PrivateL1PrivateL2CacheHierarchy(
-    l1d_size="32kB",
-    l1i_size="32kB",
-    l2_size="256kB",
+cache_hierarchy = PrivateL1PrivateL2WalkCacheHierarchy(
+    l1d_size="32KiB",
+    l1i_size="32KiB",
+    l2_size="256KiB",
 )
 
 # The memory structure can be different from the memory structure used in
 # taking the checkpoints, but the size of the memory must be equal or larger.
-memory = DualChannelDDR4_2400(size="2GB")
+memory = DualChannelDDR4_2400(size="2GiB")
 
 processor = SimpleProcessor(
     cpu_type=CPUTypes.TIMING,

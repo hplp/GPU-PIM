@@ -58,6 +58,8 @@ class Disjoint_VIPER(RubySystem):
             self.network_cpu = DisjointSimple(self)
             self.network_gpu = DisjointSimple(self)
 
+        self.block_size_bytes = options.cacheline_size
+
         # Construct CPU controllers
         cpu_dir_nodes = construct_dirs(options, system, self, self.network_cpu)
         (cp_sequencers, cp_cntrl_nodes) = construct_corepairs(
@@ -117,7 +119,7 @@ class Disjoint_VIPER(RubySystem):
         dma_cntrls = []
         for i, dma_device in enumerate(dma_devices):
             dma_seq = DMASequencer(version=i, ruby_system=self)
-            dma_cntrl = DMA_Controller(
+            dma_cntrl = GPU_VIPER_DMA_Controller(
                 version=i, dma_sequencer=dma_seq, ruby_system=self
             )
 
