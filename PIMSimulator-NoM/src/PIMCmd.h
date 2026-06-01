@@ -50,6 +50,7 @@ enum class PIMOpdType
     ODD_BANK,
     GRF_A,
     GRF_B,
+    GRF_C,
     SRF_M,
     SRF_A
 };
@@ -196,6 +197,8 @@ class PIMCmd
                 return "GRF_A[" + to_string(idx) + "]";
             case PIMOpdType::GRF_B:
                 return "GRF_B[" + to_string(idx) + "]";
+            case PIMOpdType::GRF_C:
+                return "GRF_C[" + to_string(idx) + "]";
             case PIMOpdType::SRF_M:
                 return "SRF_M[" + to_string(idx) + "]";
             case PIMOpdType::SRF_A:

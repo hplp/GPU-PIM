@@ -117,6 +117,19 @@ class PIMKernelFixture : public testing::Test
     {
         switch (kn_type)
         {
+            case KernelType::CONV:
+            {
+                unsigned out_start_row;
+                unsigned unused_channel_cnt;
+                kernel->preloadConv(&dim_data->input_npbst_, out_start_row, unused_channel_cnt);
+                kernel->executeConv(&dim_data->weight_npbst_, &dim_data->input_npbst_, out_start_row, unused_channel_cnt);
+                unsigned end_col = kernel->getResultColGemv(
+                    dim_data->dimTobShape(dim_data->input_dim_), dim_data->output_dim_);
+                result = new BurstType[dim_data->output_dim_ * dim_data->batch_size_];
+                kernel->readResult(result, pimBankType::ODD_BANK,
+                                   dim_data->output_dim_ * dim_data->batch_size_, 0, 0, end_col);
+                break;
+            }
             case KernelType::GEMV:
             {
                 kernel->preloadGemv(&dim_data->weight_npbst_);
@@ -172,6 +185,7 @@ class PIMKernelFixture : public testing::Test
     {
         switch (kn_type)
         {
+            case KernelType::CONV:
             case KernelType::GEMV:
             {
                 for (int i = 0; i < num_tests; i++)

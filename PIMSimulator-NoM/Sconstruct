@@ -50,8 +50,8 @@ def build(target_name, base_path, build_flags):
     build_sources = getSources("build")
     env.Program(target=target_name["binary"],
                 source=build_sources,
-                CPPPATH=[base_path["lib"], base_path["source"], base_path["tools"]],
-                LIBPATH=['.'], LIBS=['gtest', 'pthread'])
+                CPPPATH=['/usr/local/include', base_path["lib"], base_path["source"], base_path["tools"]],
+                LIBPATH=['/usr/local/lib', '.'], LIBS=['gtest', 'gtest_main', 'pthread'])
 
     no_lib = ARGUMENTS.get('NO_LIBRARY', 0)
     if int(no_lib) == 0:
@@ -59,14 +59,14 @@ def build(target_name, base_path, build_flags):
         # print ("Creating a static library from objects")
         env.StaticLibrary(target=target_name["library"],
                           source=lib_sources,
-                          CPPPATH=[base_path["lib"], base_path["source"], base_path["tools"]],
-                          LIBPATH=['.'],
+                          CPPPATH=['/usr/local/include', base_path["lib"], base_path["source"], base_path["tools"]],
+                          LIBPATH=['/usr/local/lib', '.'],
                           LIBS=['gtest', 'pthread'])
         # print ("Creating a shared library from objects")
         env.SharedLibrary(target=target_name["library"],
                           source=lib_sources,
-                          CPPPATH=[base_path["lib"], base_path["source"], base_path["tools"]],
-                          LIBPATH=['.'],
+                          CPPPATH=['/usr/local/include', base_path["lib"], base_path["source"], base_path["tools"]],
+                          LIBPATH=['/usr/local/lib', '.'],
                           LIBS=['gtest', 'pthread'])
 
 
@@ -88,8 +88,8 @@ base_path = {
 
 build_flags = {
     "gprof_option": '',
-    "CXXFLAGS": '-g -O2 -std=c++14 -Wall -Wno-reorder -Wno-sign-compare',
-    "LINKFLAGS": '-g -O2 -std=c++14 -Wall -Wno-reorder -Wno-sign-compare',
+    "CXXFLAGS": '-g -O0 -fno-omit-frame-pointer -std=c++17 -Wall -Wno-reorder -Wno-sign-compare',
+    "LINKFLAGS": '-g -O0 -fno-omit-frame-pointer -std=c++17 -Wall -Wno-reorder -Wno-sign-compare',
 }
 
 setNumJobs()

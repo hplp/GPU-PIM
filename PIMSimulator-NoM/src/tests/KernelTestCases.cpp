@@ -59,6 +59,32 @@ TEST_F(PIMKernelFixture, gemv_tree)
     delete dim_data;
 }
 
+TEST_F(PIMKernelFixture, conv)
+{
+    shared_ptr<PIMKernel> kernel = make_pim_kernel();
+
+    uint32_t input_height  = 224;
+    uint32_t input_width   = 224;
+    uint32_t input_depth   = 64;
+    uint32_t kernel_size  = 3;
+    uint32_t kernel_count = 64;
+
+    DataDim *dim_data = new DataDim(KernelType::CONV, input_height, input_width, input_depth, 
+                                        kernel_size, kernel_count, true);
+    dim_data->printDim(KernelType::CONV);
+
+    reduced_result_ = new BurstType[dim_data->dimTobShape(output_dim)];
+    result_ = getResultPIM(KernelType::CONV, dim_data, kernel, result_);
+
+    testStatsClear();
+    expectAccuracy(KernelType::CONV, output_dim, dim_data->output_npbst_,
+                   dim_data->getNumElementsPerBlocks());
+
+    delete[] result_;
+    delete[] reduced_result_;
+    delete dim_data;
+}
+
 TEST_F(PIMKernelFixture, gemv)
 {
     shared_ptr<PIMKernel> kernel = make_pim_kernel();

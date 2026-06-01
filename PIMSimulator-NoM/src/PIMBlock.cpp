@@ -110,8 +110,9 @@ std::string PIMBlock::print()
 {
     stringstream ss;
     ss << "[SRF]" << srf.binToStr() << endl;
-    for (int i = 0; i < 8; i++) ss << "[GRF_A][" << i << "]" << grfA[i].fp16ToStr() << endl;
-    for (int i = 0; i < 8; i++) ss << "[GRF_B][" << i << "]" << grfB[i].fp16ToStr() << endl;
+    for (int i = 0; i < 16; i++) ss << "[GRF_A][" << i << "]" << grfA[i].fp16ToStr() << endl;
+    for (int i = 0; i < 16; i++) ss << "[GRF_B][" << i << "]" << grfB[i].fp16ToStr() << endl;
+    for (int i = 0; i < 16; i++) ss << "[GRF_C][" << i << "]" << grfC[i].fp16ToStr() << endl;
     ss << "[M_OUT]" << mOut.binToStr() << endl;
     ss << "[A_OUT]" << aOut.binToStr() << endl;
 

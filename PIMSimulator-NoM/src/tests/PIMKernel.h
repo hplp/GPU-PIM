@@ -61,16 +61,16 @@ class PIMKernel
     int num_grfA_, num_grfB_, num_grf_;
     shared_ptr<PIMAddrManager> pim_addr_mgr_;
 
-    void addBarrier();
+    void addBarrier(int active_channels = 0);
     void runPIM();
     uint64_t getCycle();
     void parkIn();
     void parkOut();
     void changePIMMode(dramMode mode1, dramMode mode2);
     void addTransactionAll(bool isWrite, int bg, int bank, int row, int col, const std::string tag,
-                           BurstType* bst, bool use_barrier = false, int num_loop = 1);
+                           BurstType* bst, bool use_barrier = false, int num_loop = 1, int active_channels = 0);
     void addTransactionAll(bool isWrite, int bg, int bank, int row, int col, BurstType* bst,
-                           bool use_barrier = false, int num_loop = 1);
+                           bool use_barrier = false, int num_loop = 1, int active_channels = 0);
     /*
     void preprocessBn(NumpyBurstType* mean_npbst, NumpyBurstType* var_npbst,
                       NumpyBurstType* gamma_npbst, NumpyBurstType* beta_npbst,
@@ -82,19 +82,23 @@ class PIMKernel
     void programSrf();
     */
     void programCrf(vector<PIMCmd>& cmds);
-    void setControl(BurstType* bst, bool op, int crf_toggle_cond, bool grfA_zero, bool grfB_zero);
+    void setControl(BurstType* bst, bool op, int crf_toggle_cond, bool grfA_zero, bool grfB_zero, bool grfC_zero = true);
     unsigned getResultColGemv(int input_dim, int output_dim);
     void changeBank(pimBankType bank_types, int& cidx, int& rank, int& bg, int& bank,
                     unsigned& startingRow, unsigned& startingCol, unsigned& row, unsigned& col);
+    void preloadConv(NumpyBurstType* operand, unsigned& ending_row, unsigned& unused_channels, unsigned starting_row = 0);
     void preloadGemv(NumpyBurstType* operand, unsigned starting_row = 0, unsigned starting_col = 0);
     void preloadNoReplacement(NumpyBurstType* operand, unsigned startingRow, unsigned startingCol);
     /*
     void preloadEltwise(NumpyBurstType* operand, pimBankType bank_types, unsigned startingRow,
                         unsigned startingCol);
     */
+    void executeConv(NumpyBurstType* w_data, NumpyBurstType* i_data, unsigned in_ending_row, unsigned unused_channels = 0, unsigned in_starting_row = 0);
     void executeGemv(NumpyBurstType* w_data, NumpyBurstType* i_data, bool is_tree);
     void executeEltwise(int dim, pimBankType bank_types, KernelType ktype, int input0_row,
                         int result_row, int input1_row = 0);
+    void computeConv(NumpyBurstType* data, unsigned starting_row, int activation_row, int kernel_row, 
+                     int k1, int m1, int z_per_pim, unsigned num_working_channels)
     void computeGemv(NumpyBurstType* data, int num_input_tiles, int num_output_tile, int input_tile,
                      int output_tile, int batch_idx, pimBankType bank_types);
     void computeAddOrMul(int numTile, int input0Row, int resultRow, int input1Row);

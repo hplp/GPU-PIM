@@ -101,6 +101,10 @@ class PIMRank : public SimulatorObject
     {
         return idx & 0x7;
     }
+    unsigned inline getGrfIdx16(unsigned idx) // TODO: Check appropriate usage
+    {
+        return idx & 0xf;
+    }
     unsigned inline getGrfIdxHigh(unsigned r, unsigned c)
     {
         return ((r & 0x1) << 2 | ((c >> 3) & 0x3));

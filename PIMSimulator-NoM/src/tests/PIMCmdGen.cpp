@@ -35,6 +35,9 @@ vector<PIMCmd> PIMCmdGen::getPIMCmds(KernelType ktype, int num_jump_to_be_taken,
         case KernelType::ADD:
             pim_kernel = make_unique<EltwisePIMKernel>(ktype);
             break;
+        case KernelType::CONV:
+            pim_kernel = make_unique<ConvPIMKernel>(ktype);
+            break;
         case KernelType::GEMV:
             pim_kernel = make_unique<GemvPIMKernel>(ktype);
             break;

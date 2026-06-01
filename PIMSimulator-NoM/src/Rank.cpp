@@ -193,7 +193,7 @@ void Rank::check(BusPacket* packet)
     }
     else
     {
-        for (int bank = (packet->bank % 2); bank < config.NUM_BANKS; bank += 2)
+        for (int bank = (packet->bank % 2); bank < config.NUM_BANKS; bank += 2)  // FIX
             checkBank(packet->busPacketType, bank, packet->row);
     }
 }
@@ -221,7 +221,7 @@ void Rank::updateState(BusPacket* packet)
     {
         for (int bank = 0; bank < config.NUM_BANKS; bank++)
         {
-            updateBank(packet->busPacketType, bank, packet->row, (bank % 2) == packet->bank, true);
+            updateBank(packet->busPacketType, bank, packet->row, (bank % 2) == packet->bank, true); // FIX
         }
     }
 }
@@ -319,13 +319,17 @@ void Rank::readSb(BusPacket* packet)
     {
         if (packet->row == config.PIM_REG_RA)
         {
-            if (0x08 <= packet->column && packet->column <= 0x0f)
+            if (0x10 <= packet->column && packet->column <= 0x1f)
             {
                 PRINT(OUTLOG_GRF_A("READ_GRF_A"));
             }
-            else if (0x18 <= packet->column && packet->column <= 0x1f)
+            else if (0x20 <= packet->column && packet->column <= 0x2f)
             {
                 PRINT(OUTLOG_GRF_B("READ_GRF_B"));
+            }
+            else if (0x30 <= packet->column && packet->column <= 0x3f)
+            {
+                PRINT(OUTLOG_GRF_C("READ_GRF_C"));
             }
         }
         else if (pimRank->isReservedRA(packet->row))
@@ -341,10 +345,12 @@ void Rank::readSb(BusPacket* packet)
 #ifndef NO_STORAGE
     if (packet->row == config.PIM_REG_RA)
     {
-        if (0x08 <= packet->column && packet->column <= 0x0f)
-            *(packet->data) = pimRank->pimBlocks[packet->bank / 2].grfA[packet->column - 0x8];
-        else if (0x18 <= packet->column && packet->column <= 0x1f)
-            *(packet->data) = pimRank->pimBlocks[packet->bank / 2].grfB[packet->column - 0x18];
+        if (0x10 <= packet->column && packet->column <= 0x1f)
+            *(packet->data) = pimRank->pimBlocks[(packet->bank/8) * 4 + (packet->bank%4)].grfA[packet->column - 0x10];
+        else if (0x20 <= packet->column && packet->column <= 0x2f)
+            *(packet->data) = pimRank->pimBlocks[(packet->bank/8) * 4 + (packet->bank%4)].grfB[packet->column - 0x10];
+        else if (0x30 <= packet->column && packet->column <= 0x3f)
+            *(packet->data) = pimRank->pimBlocks[(packet->bank/8) * 4 + (packet->bank%4)].grfC[packet->column - 0x10];
         else
             banks[packet->bank].read(packet);
     }
@@ -406,9 +412,9 @@ void Rank::sendToBank(BusPacket* packet)
                 packet->column == 0x1f)
             {
                 abmr1Even_ = (packet->bank == 0) ? true : abmr1Even_;
-                abmr1Odd_ = (packet->bank == 1) ? true : abmr1Odd_;
+                abmr1Odd_ = (packet->bank == 4) ? true : abmr1Odd_;
                 abmr2Even_ = (packet->bank == 8) ? true : abmr2Even_;
-                abmr2Odd_ = (packet->bank == 9) ? true : abmr2Odd_;
+                abmr2Odd_ = (packet->bank == 12) ? true : abmr2Odd_;
 
                 if ((config.NUM_BANKS <= 2 && abmr1Even_ && abmr1Odd_) ||
                     (config.NUM_BANKS > 2 && abmr1Even_ && abmr1Odd_ && abmr2Even_ && abmr2Odd_))
@@ -439,7 +445,7 @@ void Rank::sendToBank(BusPacket* packet)
             if (mode_ == dramMode::HAB && packet->row == config.PIM_SBMR_RA)
             {
                 sbmr1_ = (packet->bank == 0) ? true : sbmr1_;
-                sbmr2_ = (packet->bank == 1) ? true : sbmr2_;
+                sbmr2_ = (packet->bank == 4) ? true : sbmr2_;
 
                 if (sbmr1_ && sbmr2_)
                 {

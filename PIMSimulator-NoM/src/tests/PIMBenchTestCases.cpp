@@ -21,6 +21,15 @@
 
 using namespace DRAMSim;
 
+TEST_F(PIMBenchFixture, conv)
+{
+    setPIMBenchTestCase(KernelType::CONV, 224, 224, 3, 3, 64);  
+                    // (KernelType, in_h, in_w, in_d, ker_s, ker_c)
+    executeKernel();                                    // execute w/o PIM
+    executePIMKernel();                                 // execute w/ PIM
+    expectPIMBench(2.0);
+}
+
 TEST_F(PIMBenchFixture, gemv)
 {
     setPIMBenchTestCase(KernelType::GEMV, 4096, 4096);  // (KernelType, out_vec, in_vec)

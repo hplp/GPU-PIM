@@ -360,6 +360,16 @@ struct NumpyBurstType
         FP16
     };
 
+    BurstType& getBurst(int x, int y, int z, int m)
+    {
+        return bData[m * bShape[1] * bShape[2] * bShape[3] + z * bShape[2] * bShape[3] + y * bShape[3] + x];
+    }
+
+    BurstType& getBurst(int x, int y, int z)
+    {
+        return bData[z * bShape[1] * bShape[2] + y * bShape[2] + x];
+    }
+
     BurstType& getBurst(int x, int y)
     {
         return bData[y * bShape[1] + x];
@@ -374,6 +384,17 @@ struct NumpyBurstType
         for (int i = 0; i < shape.size(); i++)
         {
             if (i == shape.size() - 1)
+                bShape.push_back(ceil(shape[i] / divisor));
+            else
+                bShape.push_back(shape[i]);
+        }
+    }
+
+    void loadTobShapeCustom(int index, double divisor)
+    {
+        for (int i = 0; i < shape.size(); i++)
+        {
+            if (i == index)
                 bShape.push_back(ceil(shape[i] / divisor));
             else
                 bShape.push_back(shape[i]);
@@ -404,6 +425,54 @@ struct NumpyBurstType
                             (u16Data[i + 11]), (u16Data[i + 12]), (u16Data[i + 13]),
                             (u16Data[i + 14]), (u16Data[i + 15]));
             bData.push_back(burst);
+        }
+    }
+
+    void loadFp16Ker(string filename)
+    {
+        npy::LoadArrayFromNumpy(filename, shape, u16Data);
+        loadTobShapeCustom(1, (double)16);
+        for (int m = 0; m < shape[0]; m++)
+        {
+            for (int z = 0; z < shape[1]; z += 16)
+            {
+                for (int y = 0; y < shape[2]; y++)
+                {
+                    for (int x = 0; x < shape[3]; x++)
+                    {
+                        BurstType burst();
+                        for (int i = 0; i < 16; i++)
+                        {
+                            if ((z + i) >= shape[1]) break;
+                            burst.fp16Data_[i] = u16Data[m * shape[1] * shape[2] * shape[3] 
+                                    + (z + i) * shape[2] * shape[3] + y * shape[3] + x];
+                        }
+                        bData.push_back(burst);
+                    }
+                }
+            }
+        }
+    }
+
+    void loadFp16Act(string filename)
+    {
+        npy::LoadArrayFromNumpy(filename, shape, u16Data);
+        loadTobShapeCustom(0, (double)16);
+        for (int z = 0; z < shape[0]; z += 16)
+        {
+            for (int y = 0; y < shape[1]; y++)
+            {
+                for (int x = 0; x < shape[2]; x++)
+                {
+                    BurstType burst();
+                    for (int i = 0; i < 16; i++)
+                    {
+                        if ((z + i) >= shape[0]) break;
+                        burst.fp16Data_[i] = u16Data[(z + i) * shape[1] * shape[2] + y * shape[2] + x];
+                    }
+                    bData.push_back(burst);
+                }
+            }
         }
     }
 
