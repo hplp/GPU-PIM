@@ -12,6 +12,8 @@
 
 #include "tests/PIMBenchTestCases.h"
 
+#include <cstdlib>
+
 #include "gtest/gtest.h"
 
 /*
@@ -21,9 +23,24 @@
 
 using namespace DRAMSim;
 
+static unsigned getEnvUnsigned(const char* name, unsigned default_value)
+{
+    const char* value = std::getenv(name);
+    if (value == nullptr)
+        return default_value;
+    return static_cast<unsigned>(std::strtoul(value, nullptr, 10));
+}
+
 TEST_F(PIMBenchFixture, conv)
 {
-    setPIMBenchTestCase(KernelType::CONV, 224, 224, 3, 3, 64);  
+    unsigned input_height = getEnvUnsigned("PIM_CONV_H", 224);
+    unsigned input_width = getEnvUnsigned("PIM_CONV_W", 224);
+    unsigned input_depth = getEnvUnsigned("PIM_CONV_D", 64);
+    unsigned kernel_size = getEnvUnsigned("PIM_CONV_K", 3);
+    unsigned kernel_count = getEnvUnsigned("PIM_CONV_COUT", input_depth);
+
+    setPIMBenchTestCase(KernelType::CONV, input_height, input_width, input_depth,
+                        kernel_size, kernel_count);
                     // (KernelType, in_h, in_w, in_d, ker_s, ker_c)
     executeKernel();                                    // execute w/o PIM
     executePIMKernel();                                 // execute w/ PIM

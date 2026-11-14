@@ -126,7 +126,8 @@ enum class dramMode
 {
     SB,
     HAB,
-    HAB_PIM
+    HAB_PIM,
+    HAB_NOM
 };
 
 enum class pimBankType

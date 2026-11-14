@@ -14,6 +14,7 @@
 #define __PIM_BENCH_TEST_CASE_H__
 
 #include <memory>
+#include <cstdlib>
 #include <string>
 
 #include "tests/TestCases.h"
@@ -23,18 +24,28 @@ using namespace DRAMSim;
 class PIMBenchTestCase
 {
   public:
-    virtual PIMBenchTestCase(KernelType k, unsigned b, unsigned out, unsigned in)
+    PIMBenchTestCase(KernelType k, unsigned b, unsigned out, unsigned in)
         : kernel_type_(k), batch_(b), out_(out), in_(in)
     {
-        mem_ = make_shared<MultiChannelMemorySystem>("ini/HBM2_samsung_2M_16B_x64.ini",
-                                                     "system_hbm_64ch.ini", ".", "example_app",
-                                                     256 * 64 * 2);
-        pim_mem_ = make_shared<MultiChannelMemorySystem>("ini/HBM2_samsung_2M_16B_x64.ini",
-                                                         "system_hbm_64ch.ini", ".", "example_app",
-                                                         256 * 64 * 2);
-        // # of pim channel = 64, # of pim rank = 1
-        kernel_ = make_shared<PIMKernel>(pim_mem_, 64, 1);
+        init();
         dim_data_ = new DataDim(kernel_type_, batch_, out_, in_, false);
+    }
+
+    PIMBenchTestCase(KernelType k)
+        : kernel_type_(k), batch_(0), out_(0), in_(0)
+    {
+        init();
+    }
+
+    void init()
+    {
+        mem_ = make_shared<MultiChannelMemorySystem>("ini/HBM2_samsung_2M_16B_x64.ini",
+                                                    "system_hbm_64ch.ini", ".", "example_app",
+                                                    256 * 64 * 2);
+        pim_mem_ = make_shared<MultiChannelMemorySystem>("ini/HBM2_samsung_2M_16B_x64.ini",
+                                                        "system_hbm_64ch.ini", ".", "example_app",
+                                                        256 * 64 * 2);
+        kernel_ = make_shared<PIMKernel>(pim_mem_, getConfigParam(UINT, "NUM_CHANS"), 1);
     }
 
     virtual ~PIMBenchTestCase()
@@ -114,7 +125,7 @@ class PIMBenchTestCase
 
     shared_ptr<PIMKernel> kernel_;
     shared_ptr<MultiChannelMemorySystem> mem_, pim_mem_;
-    DataDim *dim_data_;
+    DataDim *dim_data_ = nullptr;
 };
 
 class ConvPIMBenchTest : public PIMBenchTestCase
@@ -122,18 +133,9 @@ class ConvPIMBenchTest : public PIMBenchTestCase
   public:
     ConvPIMBenchTest(KernelType k, unsigned in_h, unsigned in_w, unsigned in_d,
             unsigned ker_s, unsigned ker_c)
-        : kernel_type_(k), in_h_(in_h), in_w_(in_w), in_d_(in_d), ker1_s_(ker_s), ker_c_(ker_c)
+        : PIMBenchTestCase(k), in_h_(in_h), in_w_(in_w), in_d_(in_d), ker_s_(ker_s), ker_c_(ker_c)
     {
-        mem_ = make_shared<MultiChannelMemorySystem>("ini/HBM2_samsung_2M_16B_x64.ini",
-                                                     "system_hbm_64ch.ini", ".", "example_app",
-                                                     256 * 64 * 2);
-        pim_mem_ = make_shared<MultiChannelMemorySystem>("ini/HBM2_samsung_2M_16B_x64.ini",
-                                                         "system_hbm_64ch.ini", ".", "example_app",
-                                                         256 * 64 * 2);
-        // # of pim channel = 64, # of pim rank = 1
-        kernel_ = make_shared<PIMKernel>(pim_mem_, 64, 1);
-        dim_data_ = new DataDim(kernel_type_, in_h_, in_w_, in_d_, ker1_s_, 
-                                    ker1_c_, ker2_s_, ker2_c_, false);
+        dim_data_ = new DataDim(kernel_type_, in_h_, in_w_, in_d_, ker_s_, ker_c_, false);
     }
 
     uint64_t measureCycle(bool is_pim_)
@@ -143,11 +145,18 @@ class ConvPIMBenchTest : public PIMBenchTestCase
 
         if (is_pim_ == true)
         {
-            kernel_->executeGemv(&dim_data_->weight_npbst_, &dim_data_->input_npbst_, false);
+            unsigned out_start_row = 0;
+            unsigned unused_channel_cnt = 0;
+            unsigned out_end_row = 0;
+            bool use_nom = std::getenv("PIM_CONV_NOM") != nullptr;
+            if (use_nom) cout << "Using Network-on-Memory (NoM) in simulation" << endl;
+            kernel_->preloadConv(&dim_data_->input_npbst_, out_start_row, unused_channel_cnt, 0, true); // TODO: Check whether allocation needs skipping
+            kernel_->executeConv(&dim_data_->weight_npbst_, &dim_data_->input_npbst_,
+                                 out_end_row, out_start_row, unused_channel_cnt, 0, use_nom);
             kernel_->runPIM();
             cycle = kernel_->getCycle();
         }
-        else
+        else // TODO: Need to write this section (VERY IMPORTANT)
         {
             uint32_t input_data_size_in_byte =
                 dim_data_->getDataSize(dim_data_->input_dim_, dim_data_->batch_size_);

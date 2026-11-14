@@ -108,6 +108,8 @@ class Rank : public SimulatorObject
                 return GREEN;
             case dramMode::HAB_PIM:
                 return CYAN;
+            case dramMode::HAB_NOM:
+                return BLUE;
         }
         return GRAY;
     }

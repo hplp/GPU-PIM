@@ -4,7 +4,7 @@ from scipy.signal import correlate
 # ----------------------------
 # Parameters
 # ----------------------------
-IMG_C, IMG_H, IMG_W = 3, 224, 224
+IMG_C, IMG_H, IMG_W = 64, 224, 224
 K_OUT = 64
 K = 3  # 3x3 kernels
 PADDING = 1
@@ -64,7 +64,7 @@ out = np.maximum(out, 0)  # ReLU
 # Save data
 # ----------------------------
 np.save("input.npy", input_image)
-np.save("kernel.npy", kernel)
+np.save("weight.npy", kernel)
 np.save("output.npy", out)
 
 print("Shapes:")

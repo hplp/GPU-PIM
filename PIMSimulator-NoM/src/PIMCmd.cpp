@@ -33,22 +33,40 @@ void PIMCmd::fromInt(uint32_t val)
             break;
 
         case PIMCmdType::NOP:
-            loopCounter_ = fromBit(val, 11, 0);
+            loopCount_ = fromBit(val, 15, 13);
+            grfFull_ = fromBit(val, 1, 12);
             break;
 
         case PIMCmdType::JUMP:
-            loopCounter_ = fromBit(val, 17, 11);
-            loopOffset_ = fromBit(val, 11, 0);
+            loopCount_ = fromBit(val, 15, 13); // TODO: Not consistent with paper
+            loopCounterIdx_ = fromBit(val, 2, 8);
+            loopOffset_ = fromBit(val, 5, 0); // TODO: Check correct? (only need to jump 32)
+            break;
+
+        case PIMCmdType::REDUCE: // TODO: Fit this to some category
+            dst_ = PIMOpdType(fromBit(val, 3, 25));
+            src0_ = PIMOpdType(fromBit(val, 3, 22));
+            loopCounterIdx_ = fromBit(val, 2, 8);
             break;
 
         case PIMCmdType::FILL:
         case PIMCmdType::MOV:
             dst_ = PIMOpdType(fromBit(val, 3, 25));
             src0_ = PIMOpdType(fromBit(val, 3, 22));
-            isRelu_ = fromBit(val, 1, 12);
+            isRelu_ = fromBit(val, 1, 17);
+            loopCount_ = fromBit(val, 4, 13);
+            grfFull_ = fromBit(val, 1, 12);
             dstIdx_ = fromBit(val, 4, 8);
             src0Idx_ = fromBit(val, 4, 4);
             src1Idx_ = fromBit(val, 4, 0);
+            break;
+
+        case PIMCmdType::NOM1:
+        case PIMCmdType::NOM2:
+            direction_ = fromBit(val, 1, 17);
+            isAuto_ = fromBit(val, 1, 15);
+            dstIdx_ = fromBit(val, 4, 8);
+            src0Idx_ = fromBit(val, 4, 4);
             break;
 
         case PIMCmdType::MAD:
@@ -56,10 +74,12 @@ void PIMCmd::fromInt(uint32_t val)
         case PIMCmdType::ADD:
         case PIMCmdType::MUL:
         case PIMCmdType::MAC:
+        case PIMCmdType::MACX:
             dst_ = PIMOpdType(fromBit(val, 3, 25));
             src0_ = PIMOpdType(fromBit(val, 3, 22));
             src1_ = PIMOpdType(fromBit(val, 3, 19));
             isAuto_ = fromBit(val, 1, 15);
+            grfFull_ = fromBit(val, 1, 12);
             dstIdx_ = fromBit(val, 4, 8);
             src0Idx_ = fromBit(val, 4, 4);
             src1Idx_ = fromBit(val, 4, 0);
@@ -76,9 +96,9 @@ void PIMCmd::validationCheck() const
     {
         if (dst_ == PIMOpdType::EVEN_BANK || dst_ == PIMOpdType::ODD_BANK)
         {
-            if (src0_ == PIMOpdType::GRF_A || src0_ == PIMOpdType::GRF_B ||
-                src1_ == PIMOpdType::GRF_A || src1_ == PIMOpdType::GRF_B ||
-                src2_ == PIMOpdType::GRF_A || src2_ == PIMOpdType::GRF_B)
+            if (src0_ == PIMOpdType::GRF_A || src0_ == PIMOpdType::GRF_B || src0_ == PIMOpdType::GRF_C ||
+                src1_ == PIMOpdType::GRF_A || src1_ == PIMOpdType::GRF_B || src1_ == PIMOpdType::GRF_C ||
+                src2_ == PIMOpdType::GRF_A || src2_ == PIMOpdType::GRF_B || src2_ == PIMOpdType::GRF_C)
             {
                 std::cerr << "ERROR) Invalid in ISA 1.0 " << toStr() << std::endl;
                 exit(-1);
@@ -95,6 +115,16 @@ void PIMCmd::validationCheck() const
            }
          */
     }
+    else if (type_ == PIMCmdType::REDUCE){
+        if (dst_ == PIMOpdType::EVEN_BANK || dst_ == PIMOpdType::ODD_BANK || 
+            src0_ == PIMOpdType::EVEN_BANK || src0_ == PIMOpdType::ODD_BANK ||
+            src0_ == PIMOpdType::SRF_M || src0_ == PIMOpdType::SRF_A)
+        {
+            std::cerr << "ERROR) Invalid in ISA 1.0 " << toStr() << std::endl;
+            exit(-1);
+        }
+
+    }
 }
 
 uint32_t PIMCmd::toInt() const
@@ -107,13 +137,22 @@ uint32_t PIMCmd::toInt() const
             break;
 
         case PIMCmdType::NOP:
-            val |= toBit(loopCounter_, 11, 0);
+            val |= toBit(grfFull_, 1, 12);
+            val |= toBit(loopCount_, 15, 13);
             break;
 
         case PIMCmdType::JUMP:
-            val |= toBit(loopCounter_, 17, 11);
-            val |= toBit(loopOffset_, 11, 0);
+            val |= toBit(loopCount_, 15, 13);
+            val |= toBit(loopCounterIdx_, 2, 8);
+            val |= toBit(loopOffset_, 5, 0);
             break;
+
+        case PIMCmdType::REDUCE: // TODO: Fit this to some category
+            val |= toBit(int(dst_), 3, 25);
+            val |= toBit(int(src0_), 3, 22);
+            val |= toBit(loopCounterIdx_, 2, 8);
+            break;
+
 
         case PIMCmdType::FILL:
         case PIMCmdType::MOV:
@@ -122,7 +161,17 @@ uint32_t PIMCmd::toInt() const
             val |= toBit(dstIdx_, 4, 8);
             val |= toBit(src0Idx_, 4, 4);
             val |= toBit(src1Idx_, 4, 0);
-            val |= toBit(isRelu_, 1, 12);
+            val |= toBit(grfFull_, 1, 12);
+            val |= toBit(loopCount_, 4, 13);
+            val |= toBit(isRelu_, 1, 17);
+            break;
+
+        case PIMCmdType::NOM1:
+        case PIMCmdType::NOM2:
+            val |= toBit(dstIdx_, 4, 8);
+            val |= toBit(src0Idx_, 4, 4);
+            val |= toBit(isAuto_, 1, 15);
+            val |= toBit(direction_, 1, 17);
             break;
 
         case PIMCmdType::MAD:
@@ -130,10 +179,12 @@ uint32_t PIMCmd::toInt() const
         case PIMCmdType::ADD:
         case PIMCmdType::MUL:
         case PIMCmdType::MAC:
+        case PIMCmdType::MACX:
             val |= toBit(int(dst_), 3, 25);
             val |= toBit(int(src0_), 3, 22);
             val |= toBit(int(src1_), 3, 19);
             val |= toBit(isAuto_, 1, 15);
+            val |= toBit(grfFull_, 1, 12);
             val |= toBit(dstIdx_, 4, 8);
             val |= toBit(src0Idx_, 4, 4);
             val |= toBit(src1Idx_, 4, 0);
@@ -156,25 +207,42 @@ std::string PIMCmd::toStr() const
             break;
 
         case PIMCmdType::NOP:
-            ss << loopCounter_ + 1 << "x";
+            ss << loopCount_ + 1 << "x";
+            if (grfFull_)
+                ss << ", 16 GRF";
             break;
 
         case PIMCmdType::JUMP:
-            ss << loopCounter_ << "x ";
-            ss << "[PC - " << loopOffset_ << "]";
+            ss << "Jump[" << loopCounterIdx_ << "]: ";
+            ss << loopCount_ << "x ";
+            ss << "(PC - " << loopOffset_ << ")";
             break;
 
+        case PIMCmdType::REDUCE: // TODO: Add the correct printing
         case PIMCmdType::FILL:
         case PIMCmdType::MOV:
             ss << opdToStr(dst_, dstIdx_) << ", ";
-            ss << opdToStr(src0_, src0Idx_);
+            ss << opdToStr(src0_, src0Idx_) << ", ";
+            ss << loopCount_ + 1 << "x";
             if (isRelu_)
                 ss << ", relu";
+            if (grfFull_)
+                ss << ", 16 GRF";
+            break;
+
+        case PIMCmdType::NOM1: // TODO: Add the correct printing
+        case PIMCmdType::NOM2:
+            ss << "col ";
+            if (direction_)
+                ss << src0Idx_ << " -> col " << dstIdx_;
+            else
+                ss << dstIdx_ << " <- col " << src0Idx_;
             break;
 
         case PIMCmdType::ADD:
         case PIMCmdType::MUL:
         case PIMCmdType::MAC:
+        case PIMCmdType::MACX: // TODO: Add the custom indexing details here as well
             ss << opdToStr(dst_, dstIdx_) << ", ";
             ss << opdToStr(src0_, src0Idx_) << ", ";
             ss << opdToStr(src1_, src1Idx_);

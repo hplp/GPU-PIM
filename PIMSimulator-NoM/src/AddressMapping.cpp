@@ -66,6 +66,11 @@ unsigned AddrMapping::bankgroupId(int bank)
     return (bank / num_bank_per_bg_);
 }
 
+unsigned AddrMapping::bankgroupParity(int bank)
+{
+    return (bank / num_bank_per_bg_) % 2;
+}
+
 bool AddrMapping::isSameBankgroup(int bank0, int bank1)
 {
     return bankgroupId(bank0) == bankgroupId(bank1);

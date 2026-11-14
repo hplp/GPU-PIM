@@ -12,6 +12,9 @@
 
 #include "tests/KernelTestCases.h"
 
+#include <cstdlib>
+#include <fstream>
+
 #include "gtest/gtest.h"
 #include "tests/PIMKernel.h"
 
@@ -73,15 +76,30 @@ TEST_F(PIMKernelFixture, conv)
                                         kernel_size, kernel_count, true);
     dim_data->printDim(KernelType::CONV);
 
-    reduced_result_ = new BurstType[dim_data->dimTobShape(output_dim)];
+    uint32_t output_dim = input_height * input_width * kernel_count / dim_data->getNumElementsPerBlocks();
+
     result_ = getResultPIM(KernelType::CONV, dim_data, kernel, result_);
 
+    if (std::getenv("DUMP_CONV_RESULT"))
+    {
+        std::ofstream out("/tmp/conv_result_u16.bin", std::ios::binary);
+        out.write(reinterpret_cast<const char*>(result_),
+                  output_dim * sizeof(BurstType));
+    }
+
+    if (output_dim != dim_data->output_npbst_.bData.size())
+    {
+        std::cerr << "Dimension mismatch; "
+                    << "output_dim=" << output_dim
+                    << " dim_data->output_npbst_.bData.size()=" << dim_data->output_npbst_.bData.size()
+                    << std::endl;
+            exit(-1);
+    }
+
     testStatsClear();
-    expectAccuracy(KernelType::CONV, output_dim, dim_data->output_npbst_,
-                   dim_data->getNumElementsPerBlocks());
+    expectAccuracy(KernelType::CONV, output_dim, dim_data->output_npbst_);
 
     delete[] result_;
-    delete[] reduced_result_;
     delete dim_data;
 }
 

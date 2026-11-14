@@ -362,21 +362,97 @@ struct NumpyBurstType
 
     BurstType& getBurst(int x, int y, int z, int m)
     {
-        return bData[m * bShape[1] * bShape[2] * bShape[3] + z * bShape[2] * bShape[3] + y * bShape[3] + x];
+        size_t idx =
+            (size_t)x * bShape[1] * bShape[2] * bShape[3] +
+            (size_t)y * bShape[2] * bShape[3] +
+            (size_t)z * bShape[3] +
+            m;
+
+        if ((idx >= bData.size()) && (bData.size() != 0))
+        {
+            std::cerr << "getBurst(x,y,z,m) OOB: "
+                    << "x=" << x
+                    << " y=" << y
+                    << " z=" << z
+                    << " m=" << m
+                    << " idx=" << idx
+                    << " bData.size=" << bData.size()
+                    << " bShape=("
+                    << bShape[0] << ", "
+                    << bShape[1] << ", "
+                    << bShape[2] << ", "
+                    << bShape[3] << ")"
+                    << std::endl;
+            exit(-1);
+        }
+
+        return bData[idx];
     }
 
     BurstType& getBurst(int x, int y, int z)
     {
-        return bData[z * bShape[1] * bShape[2] + y * bShape[2] + x];
+        size_t idx =
+            (size_t)x * bShape[1] * bShape[2] +
+            (size_t)y * bShape[2] +
+            z;
+
+        if ((idx >= bData.size()) && (bData.size() != 0))
+        {
+            std::cerr << "getBurst(x,y,z) OOB: "
+                    << "x=" << x
+                    << " y=" << y
+                    << " z=" << z
+                    << " idx=" << idx
+                    << " bData.size=" << bData.size()
+                    << " bShape=("
+                    << bShape[0] << ", "
+                    << bShape[1] << ", "
+                    << bShape[2] << ")"
+                    << std::endl;
+            exit(-1);
+        }
+
+        return bData[idx];
     }
 
     BurstType& getBurst(int x, int y)
     {
-        return bData[y * bShape[1] + x];
+        size_t idx =
+            (size_t)y * bShape[1] +
+            x;
+
+        if ((idx >= bData.size()) && (bData.size() != 0))
+        {
+            std::cerr << "getBurst(x,y) OOB: "
+                    << "x=" << x
+                    << " y=" << y
+                    << " idx=" << idx
+                    << " bData.size=" << bData.size()
+                    << " bShape=("
+                    << bShape[0] << ", "
+                    << bShape[1] << ")"
+                    << std::endl;
+            exit(-1);
+        }
+
+        return bData[idx];
     }
+
     BurstType& getBurst(int x)
     {
-        return bData[x];
+        size_t idx = x;
+
+        if ((idx >= bData.size()) && (bData.size() != 0))
+        {
+            std::cerr << "getBurst(x) OOB: "
+                    << "x=" << x
+                    << " idx=" << idx
+                    << " bData.size=" << bData.size()
+                    << std::endl;
+            exit(-1);
+        }
+
+        return bData[idx];
     }
 
     void loadTobShape(double divisor)
@@ -440,11 +516,11 @@ struct NumpyBurstType
                 {
                     for (int x = 0; x < shape[3]; x++)
                     {
-                        BurstType burst();
+                        BurstType burst;
                         for (int i = 0; i < 16; i++)
                         {
                             if ((z + i) >= shape[1]) break;
-                            burst.fp16Data_[i] = u16Data[m * shape[1] * shape[2] * shape[3] 
+                            burst.u16Data_[i] = u16Data[m * shape[1] * shape[2] * shape[3] 
                                     + (z + i) * shape[2] * shape[3] + y * shape[3] + x];
                         }
                         bData.push_back(burst);
@@ -464,11 +540,11 @@ struct NumpyBurstType
             {
                 for (int x = 0; x < shape[2]; x++)
                 {
-                    BurstType burst();
+                    BurstType burst;
                     for (int i = 0; i < 16; i++)
                     {
                         if ((z + i) >= shape[0]) break;
-                        burst.fp16Data_[i] = u16Data[(z + i) * shape[1] * shape[2] + y * shape[2] + x];
+                        burst.u16Data_[i] = u16Data[(z + i) * shape[1] * shape[2] + y * shape[2] + x];
                     }
                     bData.push_back(burst);
                 }

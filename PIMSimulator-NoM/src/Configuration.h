@@ -34,6 +34,8 @@ class Configuration
         HISTOGRAM_BIN_SIZE = getConfigParam(UINT, "HISTOGRAM_BIN_SIZE");
         JEDEC_DATA_BUS_BITS = getConfigParam(UINT, "JEDEC_DATA_BUS_BITS");
         NUM_BANKS = getConfigParam(UINT, "NUM_BANKS");
+        NUM_BANK_GROUPS = getConfigParam(UINT, "NUM_BANK_GROUPS");
+        NUM_BANKS_PER_BG = NUM_BANKS / NUM_BANK_GROUPS;
         NUM_COLS = getConfigParam(UINT, "NUM_COLS");
         NUM_CHANS = getConfigParam(UINT, "NUM_CHANS");
         NUM_PIM_BLOCKS = getConfigParam(UINT, "NUM_PIM_BLOCKS");
@@ -91,7 +93,8 @@ class Configuration
             throw invalid_argument("Not allowed zero channel");
         }
 
-        PIM_REG_RA = 0x3fff;
+        PIM_REG1_RA = 0x37ff;
+        PIM_REG2_RA = 0x3fff;
         PIM_ABMR_RA = 0x27ff;
         PIM_SBMR_RA = 0x2fff;
 
@@ -123,6 +126,18 @@ class Configuration
         SIM_TRACE_FILE = getConfigParam(STRING, "SIM_TRACE_FILE");
     }
 
+    unsigned bankId(int pimblock_id, bool is_odd)
+    {
+        return ((pimblock_id / NUM_BANKS_PER_BG) * NUM_BANKS_PER_BG * 2 + 
+                            pimblock_id % NUM_BANKS_PER_BG + NUM_BANKS_PER_BG * is_odd);
+    }
+
+    unsigned pimblockID(int bank_id)
+    {
+        return ((addrMapping.bankgroupId(bank_id) / 2) * NUM_BANKS_PER_BG + 
+                                                    (bank_id % NUM_BANKS_PER_BG));
+    }
+
     unsigned AL;
     unsigned BL;
     unsigned CMD_QUEUE_DEPTH;
@@ -131,6 +146,8 @@ class Configuration
     unsigned HISTOGRAM_BIN_SIZE;
     unsigned JEDEC_DATA_BUS_BITS;
     unsigned NUM_BANKS;
+    unsigned NUM_BANK_GROUPS;
+    unsigned NUM_BANKS_PER_BG;
     unsigned NUM_COLS;
     unsigned NUM_CHANS;
     unsigned NUM_PIM_BLOCKS;
@@ -183,7 +200,8 @@ class Configuration
     unsigned WRITE_TO_READ_DELAY_B_SHORT;
     unsigned WRITE_TO_READ_DELAY_R;
 
-    uint32_t PIM_REG_RA;
+    uint32_t PIM_REG1_RA;
+    uint32_t PIM_REG2_RA;
     uint32_t PIM_ABMR_RA;
     uint32_t PIM_SBMR_RA;
 

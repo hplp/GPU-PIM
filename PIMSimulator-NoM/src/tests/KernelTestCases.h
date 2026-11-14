@@ -119,15 +119,16 @@ class PIMKernelFixture : public testing::Test
         {
             case KernelType::CONV:
             {
-                unsigned out_start_row;
-                unsigned unused_channel_cnt;
+                unsigned out_start_row = 0;
+                unsigned unused_channel_cnt = 0;
+                unsigned out_end_row = 0;
+                bool use_nom = std::getenv("PIM_CONV_NOM") != nullptr;
+                if (use_nom) cout << "Using Network-on-Memory (NoM) in simulation" << endl;
                 kernel->preloadConv(&dim_data->input_npbst_, out_start_row, unused_channel_cnt);
-                kernel->executeConv(&dim_data->weight_npbst_, &dim_data->input_npbst_, out_start_row, unused_channel_cnt);
-                unsigned end_col = kernel->getResultColGemv(
-                    dim_data->dimTobShape(dim_data->input_dim_), dim_data->output_dim_);
-                result = new BurstType[dim_data->output_dim_ * dim_data->batch_size_];
-                kernel->readResult(result, pimBankType::ODD_BANK,
-                                   dim_data->output_dim_ * dim_data->batch_size_, 0, 0, end_col);
+                kernel->executeConv(&dim_data->weight_npbst_, &dim_data->input_npbst_,
+                                     out_end_row, out_start_row, unused_channel_cnt, 0, use_nom);
+                result = new BurstType[dim_data->output_height_ * dim_data->output_width_ * dim_data->output_depth_ / 16];
+                kernel->readResultConv(result, &dim_data->output_npbst_, out_start_row, out_end_row, unused_channel_cnt);
                 break;
             }
             case KernelType::GEMV:
@@ -173,6 +174,7 @@ class PIMKernelFixture : public testing::Test
             default:
             {
                 ERROR("== Error - Unknown KernelType trying to run");
+                exit(-1);
                 break;
             }
         }
@@ -185,7 +187,6 @@ class PIMKernelFixture : public testing::Test
     {
         switch (kn_type)
         {
-            case KernelType::CONV:
             case KernelType::GEMV:
             {
                 for (int i = 0; i < num_tests; i++)
@@ -196,6 +197,7 @@ class PIMKernelFixture : public testing::Test
                 }
                 return;
             }
+            case KernelType::CONV:
             case KernelType::ADD:
             case KernelType::MUL:
             case KernelType::RELU:
@@ -209,6 +211,7 @@ class PIMKernelFixture : public testing::Test
             default:
             {
                 ERROR("== Error - Unknown KernelType trying to run");
+                exit(-1);
                 return;
             }
         }

@@ -55,6 +55,7 @@ class AddrMapping
     }
 
     unsigned bankgroupId(int bank);
+    unsigned bankgroupParity(int bank);
     bool isSameBankgroup(int bank0, int bank1);
 
   private:

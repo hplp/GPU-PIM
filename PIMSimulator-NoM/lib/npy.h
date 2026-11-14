@@ -29,6 +29,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -440,7 +441,7 @@ inline std::string read_header(std::istream& istream) {
     }
 
     auto buf_v = std::vector<char>();
-    buf_v.reserve(header_length);
+    buf_v.resize(header_length);
     istream.read(buf_v.data(), header_length);
     std::string header(buf_v.data(), header_length);
 

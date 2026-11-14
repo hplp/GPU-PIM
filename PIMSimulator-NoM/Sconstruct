@@ -38,6 +38,14 @@ def getSources(target):
 def build(target_name, base_path, build_flags):
     # setup the default build envronments
     env = Environment()
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    include_paths = [base_path["lib"], base_path["source"], base_path["tools"], "/usr/local/include"]
+    library_paths = [".", "/usr/local/lib"]
+    if conda_prefix:
+        conda_lib = joinpath(conda_prefix, "lib")
+        include_paths.insert(0, joinpath(conda_prefix, "include"))
+        library_paths.insert(0, conda_lib)
+        env.Append(RPATH=[conda_lib])
 
     env.Append(CXXFLAGS=build_flags["CXXFLAGS"] + build_flags["gprof_option"])
     env.Append(LINKFLAGS=build_flags["LINKFLAGS"] + build_flags["gprof_option"])
@@ -50,8 +58,8 @@ def build(target_name, base_path, build_flags):
     build_sources = getSources("build")
     env.Program(target=target_name["binary"],
                 source=build_sources,
-                CPPPATH=['/usr/local/include', base_path["lib"], base_path["source"], base_path["tools"]],
-                LIBPATH=['/usr/local/lib', '.'], LIBS=['gtest', 'gtest_main', 'pthread'])
+                CPPPATH=include_paths,
+                LIBPATH=library_paths, LIBS=['gtest', 'gtest_main', 'pthread'])
 
     no_lib = ARGUMENTS.get('NO_LIBRARY', 0)
     if int(no_lib) == 0:
@@ -59,14 +67,14 @@ def build(target_name, base_path, build_flags):
         # print ("Creating a static library from objects")
         env.StaticLibrary(target=target_name["library"],
                           source=lib_sources,
-                          CPPPATH=['/usr/local/include', base_path["lib"], base_path["source"], base_path["tools"]],
-                          LIBPATH=['/usr/local/lib', '.'],
+                          CPPPATH=include_paths,
+                          LIBPATH=library_paths,
                           LIBS=['gtest', 'pthread'])
         # print ("Creating a shared library from objects")
         env.SharedLibrary(target=target_name["library"],
                           source=lib_sources,
-                          CPPPATH=['/usr/local/include', base_path["lib"], base_path["source"], base_path["tools"]],
-                          LIBPATH=['/usr/local/lib', '.'],
+                          CPPPATH=include_paths,
+                          LIBPATH=library_paths,
                           LIBS=['gtest', 'pthread'])
 
 

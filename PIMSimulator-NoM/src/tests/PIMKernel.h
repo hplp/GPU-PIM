@@ -43,8 +43,10 @@ class PIMKernel
         transaction_size_ = getConfigParam(UINT, "BL") *
                             (getConfigParam(UINT, "JEDEC_DATA_BUS_BITS") / 8);  // in byte
 
+        num_banks_per_bg_ = num_banks_ / num_bank_groups_;
+
         // FIXME: HARDCODED
-        num_grf_ = num_grfA_ = num_grfB_ = 8;
+        num_grf_ = num_grfA_ = num_grfB_ = num_grfC_ = 16; // TODO: Give proper solution
         num_total_pim_blocks_ = num_pim_blocks_ * num_pim_chans_ * num_pim_ranks_;
 
         pim_chans_.clear();
@@ -58,7 +60,7 @@ class PIMKernel
 
     int transaction_size_;
     int num_pim_chans_, num_pim_ranks_;
-    int num_grfA_, num_grfB_, num_grf_;
+    int num_grfA_, num_grfB_, num_grfC_, num_grf_;
     shared_ptr<PIMAddrManager> pim_addr_mgr_;
 
     void addBarrier(int active_channels = 0);
@@ -66,7 +68,7 @@ class PIMKernel
     uint64_t getCycle();
     void parkIn();
     void parkOut();
-    void changePIMMode(dramMode mode1, dramMode mode2);
+    void changePIMMode(dramMode mode1, dramMode mode2, int active_channels = 0);
     void addTransactionAll(bool isWrite, int bg, int bank, int row, int col, const std::string tag,
                            BurstType* bst, bool use_barrier = false, int num_loop = 1, int active_channels = 0);
     void addTransactionAll(bool isWrite, int bg, int bank, int row, int col, BurstType* bst,
@@ -81,24 +83,26 @@ class PIMKernel
     /*
     void programSrf();
     */
-    void programCrf(vector<PIMCmd>& cmds);
-    void setControl(BurstType* bst, bool op, int crf_toggle_cond, bool grfA_zero, bool grfB_zero, bool grfC_zero = true);
+    void programCrf(vector<PIMCmd>& cmds, int crf_idx = 0, int active_channels = 0);
+    void setControl(BurstType* bst, bool op, int crf_toggle_cond, bool grfA_zero, bool grfB_zero, bool grfC_zero = true, bool change_mode = true, bool is_nom = false);
     unsigned getResultColGemv(int input_dim, int output_dim);
     void changeBank(pimBankType bank_types, int& cidx, int& rank, int& bg, int& bank,
                     unsigned& startingRow, unsigned& startingCol, unsigned& row, unsigned& col);
-    void preloadConv(NumpyBurstType* operand, unsigned& ending_row, unsigned& unused_channels, unsigned starting_row = 0);
+    void preloadConv(NumpyBurstType* operand, unsigned& ending_row, unsigned& unused_channels, unsigned starting_row = 0, bool skip_allocation = false);
     void preloadGemv(NumpyBurstType* operand, unsigned starting_row = 0, unsigned starting_col = 0);
     void preloadNoReplacement(NumpyBurstType* operand, unsigned startingRow, unsigned startingCol);
     /*
     void preloadEltwise(NumpyBurstType* operand, pimBankType bank_types, unsigned startingRow,
                         unsigned startingCol);
     */
-    void executeConv(NumpyBurstType* w_data, NumpyBurstType* i_data, unsigned in_ending_row, unsigned unused_channels = 0, unsigned in_starting_row = 0);
+    void executeConv(NumpyBurstType* w_data, NumpyBurstType* i_data, unsigned& out_ending_row,
+                     unsigned in_ending_row, unsigned unused_channels = 0,
+                     unsigned in_starting_row = 0, bool use_nom = false);
     void executeGemv(NumpyBurstType* w_data, NumpyBurstType* i_data, bool is_tree);
     void executeEltwise(int dim, pimBankType bank_types, KernelType ktype, int input0_row,
                         int result_row, int input1_row = 0);
     void computeConv(NumpyBurstType* data, unsigned starting_row, int activation_row, int kernel_row, 
-                     int k1, int m1, int z_per_pim, unsigned num_working_channels)
+                     int k1, int m1, int z_per_pim, unsigned num_working_channels);
     void computeGemv(NumpyBurstType* data, int num_input_tiles, int num_output_tile, int input_tile,
                      int output_tile, int batch_idx, pimBankType bank_types);
     void computeAddOrMul(int numTile, int input0Row, int resultRow, int input1Row);
@@ -107,20 +111,46 @@ class PIMKernel
 
     void readResult(BurstType* resultBst, pimBankType bank_types, int output_dim,
                     uint64_t baseAddr = 0, unsigned startingRow = 0, unsigned startingCol = 0);
+    void readResultConv(BurstType* resultBst, NumpyBurstType* result, unsigned starting_row, unsigned ending_row, unsigned unused_channels = 0);
     void readData(BurstType* bst_data, size_t bst_cnt, unsigned s_row = 0, unsigned s_col = 0);
     void adderTree(BurstType* result, int output_dim, int numTile, int step, fp16* temp);
 
   private:
+    struct Transfers
+    {
+        uint64_t read_addr;
+        uint64_t write_addr;
+    };
+
+    vector<Transfers> halo_transfers_;
+    vector<BurstType> halo_transfer_data_;
+
+    vector<Transfers> align_transfers_;
+    vector<BurstType> align_transfer_data_;
+    vector<uint64_t> zero_write_addrs_;
+
+    void issueConvHaloFills(unsigned in_starting_row, unsigned in_ending_row,
+                            int channel_shift, int num_channels_per_row,
+                            unsigned num_working_channels, bool use_nom);
+    void issueConvAlignTransfers(unsigned in_ending_row, int output_rows_per_pim,
+                                 int y_per_pim, int iter_count,
+                                 int channel_shift, int num_channels_per_row,
+                                 unsigned num_working_channels, bool use_nom);
+    void issueNomHaloTransfers(unsigned in_starting_row, unsigned in_ending_row, unsigned num_working_channels);
+    void issueNomAlignTransfers(unsigned base_partial_row, int y_per_pim, int iter_count,
+                                unsigned num_working_channels);
+
     unsigned cycle_;
-    unsigned num_banks_, num_pim_blocks_, num_bank_groups_, num_total_pim_blocks_;
-    BurstType null_bst_, bst_hab_pim_, bst_hab_;
-    BurstType crf_bst_[4];
+    unsigned num_banks_, num_pim_blocks_, num_bank_groups_, num_total_pim_blocks_, num_banks_per_bg_;
+    BurstType null_bst_, bst_hab_pim_, bst_hab_nom_, bst_hab_, bst_rst_grf_;
+    BurstType crf_bst_[8][4];
     BurstType* srf_bst_;
     vector<int> pim_chans_;
     vector<int> pim_ranks_;
     PIMMode mode_;
     shared_ptr<MultiChannelMemorySystem> mem_;
-    const uint32_t pim_reg_ra_ = 0x3fff;
+    const uint32_t pim_reg1_ra_ = 0x37ff;
+    const uint32_t pim_reg2_ra_ = 0x3fff;
     const uint32_t pim_abmr_ra_ = 0x27ff;
     const uint32_t pim_sbmr_ra_ = 0x2fff;
 

@@ -39,16 +39,22 @@ namespace DRAMSim
         << config.addrMapping.bankgroupId(packet->bank) << "] ba[" << packet->bank << "] ro[" \
         << bankStates[packet->bank].openRowAddress << "] @" << currentClockCycle
 #define OUTLOG_GRF_A(msg)                                                                 \
-    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] pb[" << packet->bank / 2 \
-        << " reg" << packet->column - 0x8 << " @" << currentClockCycle
+    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] pb[" << config.pimblockID(packet->bank) \
+        << "] regA[" << packet->column - 0x10 << " @" << currentClockCycle
 #define OUTLOG_GRF_B(msg)                                                                 \
-    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] pb[" << packet->bank / 2 \
-        << "] reg[" << packet->column - 0x18 << "] @" << currentClockCycle
+    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] pb[" << config.pimblockID(packet->bank) \
+        << "] regB[" << packet->column << "] @" << currentClockCycle
+#define OUTLOG_GRF_C(msg)                                                                 \
+    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] pb[" << config.pimblockID(packet->bank) \
+        << "] regC[" << packet->column - 0x10 << "] @" << currentClockCycle
 #define OUTLOG_B_GRF_A(msg)                                                                    \
-    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] reg[" << packet->column - 0x8 \
+    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] regA[" << packet->column - 0x10 \
         << "] @" << currentClockCycle
 #define OUTLOG_B_GRF_B(msg)                                                                     \
-    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] reg[" << packet->column - 0x18 \
+    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] regB[" << packet->column \
+        << "] @" << currentClockCycle
+#define OUTLOG_B_GRF_C(msg)                                                                     \
+    msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] regC[" << packet->column - 0x10 \
         << "] @" << currentClockCycle
 #define OUTLOG_B_CRF(msg)                                                                      \
     msg << " ch[" << getChanId() << "] ra[" << getRankId() << "] idx[" << packet->column - 0x4 \
@@ -63,8 +69,10 @@ class PIMRank : public SimulatorObject
     int rankId;
     ostream& dramsimLog;
     Configuration& config;
-    int pimPC_, lastJumpIdx_, numJumpToBeTaken_, lastRepeatIdx_, numRepeatToBeDone_;
-    bool pimOpMode_, toggleEvenBank_, toggleOddBank_, toggleRa13h_, crfExit_;
+    int pimPC_, lastRepeatIdx_, numRepeatToBeDone_;
+    int lastJumpIdx_[4];
+    int numJumpToBeTaken_[4];
+    bool pimOpMode_, pimOrNom_, toggleEvenBank_, toggleOddBank_, toggleRa13h_, crfExit_;
 
   public:
     PIMRank(ostream& simLog, Configuration& configuration);
@@ -80,11 +88,14 @@ class PIMRank : public SimulatorObject
     void writeHab(BusPacket* packet);
     void doPIM(BusPacket* packet);
     void doPIMBlock(BusPacket* packet, PIMCmd curCmd, int pimblock_id);
+    void doNOM(BusPacket* packet, PIMCmd curCmd);
     void controlPIM(BusPacket* packet);
-    void readOpd(int pb, BurstType& bst, PIMOpdType type, BusPacket* packet, int idx, bool is_auto,
-                 bool is_mac);
-    void writeOpd(int pb, BurstType& bst, PIMOpdType type, BusPacket* packet, int idx, bool is_auto,
-                  bool is_mac);
+    void readOpd(int pb, BurstType& bst, PIMOpdType type, BusPacket* packet, int idx, bool is_auto, bool grf_full,
+                 bool is_mac, bool special_indexing = false);
+    void writeOpd(int pb, BurstType& bst, PIMOpdType type, BusPacket* packet, int idx, bool is_auto, bool grf_full,
+                  bool is_mac, bool special_indexing = false);
+    void readOpdTrans(int pb, BurstType& bst, PIMOpdType type, BusPacket* packet, int idx);
+    void writeOpdTrans(int pb, BurstType& bst, PIMOpdType type, BusPacket* packet, int idx);
     bool isToggleCond(BusPacket* packet);
 
     union crf_t

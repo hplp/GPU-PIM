@@ -28,16 +28,16 @@ enum class PIMCmdType
     ADD,
     MUL,
     MAC,
+    MACX,
     MAD,
+    REDUCE,
     REV0,
-    REV1,
-    REV2,
     MOV,
     FILL,
-    REV3,
-    REV4,
-    REV5,
-    REV6,
+    NOM1,
+    NOM2,
+    REV1,
+    REV2,
     JUMP,
     EXIT
 };
@@ -63,13 +63,16 @@ class PIMCmd
     PIMOpdType src0_;
     PIMOpdType src1_;
     PIMOpdType src2_;
-    int loopCounter_;
+    int loopCounterIdx_;
+    int loopCount_;
     int loopOffset_;
     int isAuto_;
     int dstIdx_;
     int src0Idx_;
     int src1Idx_;
     int isRelu_;
+    int grfFull_;
+    int direction_;
 
     PIMCmd()
         : type_(PIMCmdType::NOP),
@@ -77,93 +80,149 @@ class PIMCmd
           src0_(PIMOpdType::A_OUT),
           src1_(PIMOpdType::A_OUT),
           src2_(PIMOpdType::A_OUT),
-          loopCounter_(0),
+          loopCounterIdx_(0),
+          loopCount_(0),
           loopOffset_(0),
           isAuto_(0),
           dstIdx_(0),
           src0Idx_(0),
-          src1Idx_(0)
+          src1Idx_(0),
+          isRelu_(0),
+          grfFull_(0)
     {
     }
 
     // NOP, CTRL
-    PIMCmd(PIMCmdType type, int loopCounter)
+    PIMCmd(PIMCmdType type, int loop_count, int grf_full = 0)
         : type_(type),
           dst_(PIMOpdType::A_OUT),
           src0_(PIMOpdType::A_OUT),
           src1_(PIMOpdType::A_OUT),
           src2_(PIMOpdType::A_OUT),
-          loopCounter_(loopCounter),
+          loopCounterIdx_(0),
+          loopCount_(loop_count),
           loopOffset_(0),
           isAuto_(0),
           dstIdx_(0),
           src0Idx_(0),
-          src1Idx_(0)
+          src1Idx_(0),
+          isRelu_(0),
+          grfFull_(grf_full)
     {
     }
 
     // JUMP
-    PIMCmd(PIMCmdType type, int loopCounter, int loop_offset)
+    PIMCmd(PIMCmdType type, int loop_count, int loop_offset, int loop_counter_idx)
         : type_(type),
           dst_(PIMOpdType::A_OUT),
           src0_(PIMOpdType::A_OUT),
           src1_(PIMOpdType::A_OUT),
           src2_(PIMOpdType::A_OUT),
-          loopCounter_(loopCounter),
+          loopCounterIdx_(loop_counter_idx),
+          loopCount_(loop_count),
           loopOffset_(loop_offset),
           isAuto_(0),
           dstIdx_(0),
           src0Idx_(0),
-          src1Idx_(0)
+          src1Idx_(0),
+          isRelu_(0),
+          grfFull_(0)
     {
     }
 
-    PIMCmd(PIMCmdType type, PIMOpdType dst, PIMOpdType src0, int is_auto = 0, int dst_idx = 0,
-           int src0_idx = 0, int src1_idx = 0, int is_relu = 0)
+    // NOM
+    PIMCmd(PIMCmdType type, int direction, int is_auto, int dst_idx, int src0_idx)
+        : type_(type),
+          dst_(PIMOpdType::A_OUT),
+          src0_(PIMOpdType::A_OUT),
+          src1_(PIMOpdType::A_OUT),
+          src2_(PIMOpdType::A_OUT),
+          loopCounterIdx_(0),
+          loopCount_(0),
+          loopOffset_(0),
+          isAuto_(is_auto),
+          dstIdx_(dst_idx),
+          src0Idx_(src0_idx),
+          src1Idx_(0),
+          isRelu_(0),
+          grfFull_(0),
+          direction_(direction)
+    {
+    }
+
+    PIMCmd(PIMCmdType type, PIMOpdType dst, PIMOpdType src0, int loop_count, int is_auto, int dst_idx = 0,
+           int src0_idx = 0, int src1_idx = 0, int is_relu = 0, int grf_full = 0)
         : type_(type),
           dst_(dst),
           src0_(src0),
           src1_(PIMOpdType::A_OUT),
           src2_(PIMOpdType::A_OUT),
-          loopCounter_(0),
+          loopCounterIdx_(0),
+          loopCount_(loop_count),
           loopOffset_(0),
           isAuto_(is_auto),
           dstIdx_(dst_idx),
           src0Idx_(src0_idx),
           src1Idx_(src1_idx),
-          isRelu_(is_relu)
+          isRelu_(is_relu),
+          grfFull_(grf_full)
+    {
+    }
+
+    // REDUCE
+    PIMCmd(PIMCmdType type, PIMOpdType dst, PIMOpdType src0, int loop_counter_idx) // TODO: Fit this to some category (can fit with FILL, MOV)
+        : type_(type),
+          dst_(dst),
+          src0_(src0),
+          src1_(PIMOpdType::A_OUT),
+          src2_(PIMOpdType::A_OUT),
+          loopCounterIdx_(loop_counter_idx),
+          loopCount_(0),
+          loopOffset_(0),
+          isAuto_(0),
+          dstIdx_(0),
+          src0Idx_(0),
+          src1Idx_(0),
+          isRelu_(0),
+          grfFull_(0)
     {
     }
 
     PIMCmd(PIMCmdType type, PIMOpdType dst, PIMOpdType src0, PIMOpdType src1, int is_auto = 0,
-           int dst_idx = 0, int src0_idx = 0, int src1_idx = 0)
+           int dst_idx = 0, int src0_idx = 0, int src1_idx = 0, int grf_full = 0)
         : type_(type),
           dst_(dst),
           src0_(src0),
           src1_(src1),
           src2_(PIMOpdType::A_OUT),
-          loopCounter_(0),
+          loopCounterIdx_(0),
+          loopCount_(0),
           loopOffset_(0),
           isAuto_(is_auto),
           dstIdx_(dst_idx),
           src0Idx_(src0_idx),
-          src1Idx_(src1_idx)
+          src1Idx_(src1_idx),
+          isRelu_(0),
+          grfFull_(grf_full)
     {
     }
 
     PIMCmd(PIMCmdType type, PIMOpdType dst, PIMOpdType src0, PIMOpdType src1, PIMOpdType src2,
-           int is_auto = 0, int dst_idx = 0, int src0_idx = 0, int src1_idx = 0)
+           int is_auto = 0, int dst_idx = 0, int src0_idx = 0, int src1_idx = 0, int grf_full = 0)
         : type_(type),
           dst_(dst),
           src0_(src0),
           src1_(src1),
           src2_(src2),
-          loopCounter_(0),
+          loopCounterIdx_(0),
+          loopCount_(0),
           loopOffset_(0),
           isAuto_(is_auto),
           dstIdx_(dst_idx),
           src0Idx_(src0_idx),
-          src1Idx_(src1_idx)
+          src1Idx_(src1_idx),
+          isRelu_(0),
+          grfFull_(grf_full)
     {
     }
 
@@ -218,6 +277,8 @@ class PIMCmd
                 return "NOP";
             case PIMCmdType::JUMP:
                 return "JUMP";
+            case PIMCmdType::REDUCE:
+                return "REDUCE";
             case PIMCmdType::FILL:
                 return "FILL";
             case PIMCmdType::MOV:
@@ -228,8 +289,14 @@ class PIMCmd
                 return "MUL";
             case PIMCmdType::MAC:
                 return "MAC";
+            case PIMCmdType::MACX:
+                return "MACX";
             case PIMCmdType::MAD:
                 return "MAD";
+            case PIMCmdType::NOM1:
+                return "NOM1";
+            case PIMCmdType::NOM2:
+                return "NOM2";
             default:
                 return "NOT_DEFINED";
         }

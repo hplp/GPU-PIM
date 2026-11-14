@@ -158,8 +158,10 @@ class DataDim
                 string base_dir = "data/conv/";
 
                 input_npbst_.loadFp16Act(base_dir + "input.npy");
-                kernel_npbst_.loadFp16Ker(base_dir + "kernel.npy");
+                weight_npbst_.loadFp16Ker(base_dir + "weight.npy");
                 output_npbst_.loadFp16Act(base_dir + "output.npy");
+
+                // TODO: Check whether dimensions need to set again here?
 
                 return;
             }
@@ -243,13 +245,21 @@ class DataDim
         {
             case KernelType::CONV:
             {
-                input_npbst_.shape = {input_depth_, input_height_, input_width_};          // C, H, W
-                kernel_npbst_.shape = {kernel_count_, input_depth_, kernel_size_, kernel_size_};        // Cout, Cin, Kh, Kw
-                output_npbst_.shape = {output1_depth_, output1_height_, output1_width_};       // C, H, W
+                input_npbst_.shape.push_back(input_depth_);
+                input_npbst_.shape.push_back(input_height_);
+                input_npbst_.shape.push_back(input_width_);
+                input_npbst_.loadTobShapeCustom(0, 16); // Cin, H, W
 
-                kernel_npbst_.loadTobShapeCustom(1, 16);             // allocate weight burst data (fp16)
-                input_npbst_.loadTobShapeCustom(0, 16);               // allocate input burst data (fp16)
-                output_npbst_.loadTobShapeCustom(0, 16);             // allocate output burst data (fp16)
+                weight_npbst_.shape.push_back(kernel_count_);
+                weight_npbst_.shape.push_back(input_depth_);
+                weight_npbst_.shape.push_back(kernel_size_);
+                weight_npbst_.shape.push_back(kernel_size_);
+                weight_npbst_.loadTobShapeCustom(1, 16); // Cout, Cin, Kh, Kw
+
+                output_npbst_.shape.push_back(output_depth_);
+                output_npbst_.shape.push_back(output_height_);
+                output_npbst_.shape.push_back(output_width_);
+                output_npbst_.loadTobShapeCustom(0, 16); // Cout, H, W
 
                 return;
             }
@@ -301,9 +311,6 @@ class DataDim
     NumpyBurstType weight_npbst_;
     NumpyBurstType output_npbst_;
 
-    NumpyBurstType kernel_npbst_;
-    NumpyBurstType output_npbst_;
-
     /* dump */
     NumpyBurstType preloaded_npbst_;
     NumpyBurstType result_npbst_;
@@ -344,7 +351,6 @@ class DataDim
             {
                 ERROR("== Error - Using wrong function");
                 exit(-1);
-                break;
             }
             case KernelType::MUL:
             case KernelType::ADD:
@@ -402,7 +408,7 @@ class DataDim
             case KernelType::CONV:
             {
                 cout << "  Input dimension: " << input_height_ << "x" << input_width_ << "x" << input_depth_ << endl;
-                cout << "  Kernel quantity: " << kernel_count_, ", dimension: " << kernel_size_ << "x" << kernel_size_ << endl;
+                cout << "  Kernel quantity: " << kernel_count_ << ", dimension: " << kernel_size_ << "x" << kernel_size_ << endl;
                 cout << "  Output dimension: " << output_height_ << "x" << output_width_ << "x" << output_depth_ << endl;
                 break;
             }
